@@ -6,6 +6,17 @@ import type { Context } from '../context.js';
 import { filteredEvents } from '../filtered-events.js';
 
 export const subscriptions: SubscriptionResolvers = {
+  equipmentReturned: {
+    subscribe: (_, __, { user, db, pubsub }) => {
+      requireUser(user);
+      const events = pubsub.asyncIterableIterator<{ equipmentReturned: Equipment }>(['EQUIPMENT_RETURNED']);
+      return filteredEvents(events, async () => (await sessionUser(db, user)).role === 'ADMIN');
+    },
+    resolve: (payload: { equipmentReturned: Equipment }, _: unknown, { loaders }: Context) => {
+      for (const loader of Object.values(loaders)) loader.clearAll();
+      return payload.equipmentReturned;
+    },
+  },
   equipmentAssigned: {
     subscribe: (_, __, { user, db, pubsub }) => {
       requireUser(user);

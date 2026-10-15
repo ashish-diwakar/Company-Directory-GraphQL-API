@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import { ASSIGN, DIRECTORY } from '../operations';
 import type { Employee, Assignment } from '../operations';
 import { explainError } from '../errors';
+import { HISTORY } from '../history-operations';
 import { INVENTORY } from '../inventory-operations';
 import type { InventoryData } from '../inventory-operations';
 export function AdminPanel() {
@@ -18,10 +19,11 @@ export function AdminPanel() {
     variables: { search, offset, limit: 20 }, fetchPolicy: 'cache-and-network',
   });
   const items = inventory?.equipmentInventory.items ?? [];
+  const total = inventory?.equipmentInventory.total ?? 0;
   async function submit(event: FormEvent) {
     event.preventDefault(); setMessage(undefined);
     try {
-      const result = await assign({ variables: { employeeId, equipmentId }, refetchQueries: [DIRECTORY, INVENTORY], awaitRefetchQueries: true });
+      const result = await assign({ variables: { employeeId, equipmentId }, refetchQueries: [DIRECTORY, INVENTORY, HISTORY], awaitRefetchQueries: true });
       setMessage({ error: false, text: `${result.data?.assignEquipment.model ?? 'Equipment'} assigned successfully.` });
     } catch (error) { setMessage({ error: true, text: explainError(error) }); }
   }
@@ -35,10 +37,14 @@ export function AdminPanel() {
       {inventoryLoading && <p role="status">Loading devices…</p>}
       {inventoryError && <p role="alert" className="notice error">{explainError(inventoryError)}</p>}
       {!inventoryLoading && !inventoryError && items.length === 0 && <p className="footnote">No matching devices. Add devices in Inventory or change your search.</p>}
-      <div className="picker-pages"><button type="button" className="secondary" disabled={inventoryLoading || offset === 0} onClick={() => { setOffset(value => Math.max(0, value - 20)); setEquipment(''); }}>Previous</button><button type="button" className="secondary" disabled={inventoryLoading || offset + 20 >= (inventory?.equipmentInventory.total ?? 0)} onClick={() => { setOffset(value => value + 20); setEquipment(''); }}>Next</button></div>
+      {!inventoryError && (total > 20 || offset > 0) && <div>
+        <p className="footnote" role="status">{items.length ? `Devices ${offset + 1}–${Math.min(offset + items.length, total)} of ${total} matching devices.` : 'No devices on this page.'} Previous and Next change the devices shown in the Equipment dropdown, 20 at a time.</p>
+        <div className="picker-pages"><button type="button" className="secondary" disabled={inventoryLoading || offset === 0} onClick={() => { setOffset(value => Math.max(0, value - 20)); setEquipment(''); }}>Previous</button><button type="button" className="secondary" disabled={inventoryLoading || offset + 20 >= total} onClick={() => { setOffset(value => value + 20); setEquipment(''); }}>Next</button></div>
+      </div>}
       <button disabled={loading || inventoryLoading || !employeeId || !equipmentId}>{loading ? 'Assigning…' : 'Assign equipment →'}</button>
     </form>
     {message && <p role={message.error ? 'alert' : 'status'} className={`notice ${message.error ? 'error' : 'success'}`}>{message.text}</p>}
     <p className="footnote"><a className="text-link" href="#inventory">Manage equipment inventory →</a></p>
   </section>;
 }
+

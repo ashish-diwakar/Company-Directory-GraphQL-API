@@ -23,6 +23,7 @@ type Equipment {
 }
 
 type Query {
+  equipmentHistory(equipmentId: ID, offset: Int = 0, limit: Int = 20): AssignmentHistoryPage!
   myEquipment: [Equipment!]!
   equipmentInventory(search: String, assigned: Boolean, offset: Int = 0, limit: Int = 20): EquipmentPage!
   me: User
@@ -40,6 +41,7 @@ input PublicEmployeeInput {
 }
 
 type Mutation {
+  returnEquipment(equipmentId: ID!, expectedEmployeeId: ID!, notes: String): Equipment!
   linkAccountToEmployee(userId: ID!, employeeId: ID): User!
   createEquipment(input: EquipmentInput!): Equipment!
   updateEquipment(id: ID!, input: EquipmentInput!): Equipment!
@@ -61,6 +63,26 @@ type AuthPayload { token: String! user: User! expiresAt: String! }
 input RegisterInput { name: String! email: String! password: String! }
 
 type Subscription {
+  equipmentReturned: Equipment!
   equipmentAssigned: Equipment!
   myEquipmentChanged: Boolean!
 }
+
+enum AssignmentAction { ASSIGNED REASSIGNED RETURNED }
+type AssignmentEvent {
+  id: ID!
+  equipmentId: ID!
+  equipmentModel: String!
+  serialNumber: String!
+  action: AssignmentAction!
+  actorId: ID!
+  actorName: String!
+  actorEmail: String!
+  fromEmployeeId: ID
+  fromEmployeeName: String
+  toEmployeeId: ID
+  toEmployeeName: String
+  notes: String
+  createdAt: String!
+}
+type AssignmentHistoryPage { items: [AssignmentEvent!]! total: Int! }

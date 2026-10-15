@@ -64,3 +64,29 @@ model Equipment {
   @@index([assignedToId])
 }
 
+enum AssignmentAction {
+  ASSIGNED
+  REASSIGNED
+  RETURNED
+}
+
+// Historical snapshots intentionally survive reseeding/deletion of directory records.
+model AssignmentEvent {
+  id String @id @default(uuid())
+  equipmentId String
+  equipmentModel String
+  serialNumber String
+  action AssignmentAction
+  actorId String
+  actorName String
+  actorEmail String
+  fromEmployeeId String?
+  fromEmployeeName String?
+  toEmployeeId String?
+  toEmployeeName String?
+  notes String?
+  createdAt DateTime @default(now())
+  @@index([equipmentId, createdAt])
+  @@index([createdAt])
+}
+

@@ -12,4 +12,5 @@ export const resolvers: Resolvers = {
   Team: teamFields,
   Equipment: equipmentFields,
   User: userFields,
+  AssignmentEvent: { createdAt: event => event.createdAt.toISOString() },
 };

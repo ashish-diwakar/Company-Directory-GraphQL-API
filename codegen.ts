@@ -9,6 +9,7 @@ const config: CodegenConfig = {
         useTypeImports: true,
         contextType: '../context.js#Context',
         mappers: {
+          AssignmentEvent: '../data/models.js#AssignmentEventRecord',
           User: '../data/models.js#UserRecord',
           Employee: '../data/models.js#EmployeeRecord',
           Team: '../data/models.js#TeamRecord',

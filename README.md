@@ -4,7 +4,29 @@ A React workspace for people, teams, and equipment, backed by Apollo Server 4, P
 
 **POC scope:** one organization running one API instance with a persistent SQLite database. SQLite remains the supported database; the remaining improvements will be delivered one feature at a time for manual verification.
 
-## Latest feature: employee links and personal equipment
+## Latest feature: device returns and assignment history
+
+Administrators can now return a received device to unassigned stock from **Inventory → Return**. The confirmation shows the device/serial and current owner, accepts optional notes (up to 500 characters), and checks that the owner has not changed since the screen was opened. If another admin has reassigned the device, the API returns `CONFLICT` instead of clearing the newer assignment. Returning an already-unassigned device is a harmless no-op.
+
+Every actual assignment, reassignment, or return now creates a history entry **in the same SQLite transaction** as the ownership change. A failed history write rolls back the ownership change. Entries snapshot the device model/serial, acting admin's name/email/ID, prior/new employee names/IDs, action, timestamp, and optional return notes. Repeating an assignment to the same owner or returning an already-returned device creates no duplicate history or event.
+
+Choose a device's **History** button or **All assignment history** to view the paginated admin-only audit trail. There is no API to edit/delete entries. Snapshots survive later profile/device edits and directory reseeding; they intentionally do not depend on live employee/equipment foreign keys. This is an application-level append-only assignment log, not a tamper-proof ledger against someone who controls the SQLite file. Inventory metadata edits, login activity, and account-link changes are not yet audited.
+
+Returns publish an admin-only detailed return event and a private boolean list-change notification to the former owner. The former owner's **My equipment** list refreshes and removes the device. Admin directory live alerts distinguish assignments from returns. Other employees cannot read history or receive return details.
+
+### Verify this milestone
+
+1. As admin, assign an unassigned device to an employee. Open **Inventory → History** for that device: expect **ASSIGNED**, your name/email, timestamp, and the new owner.
+2. Reassign it to another employee. History should show **REASSIGNED** with both names. Repeating the same assignment should not add another row.
+3. Choose **Return**, verify the serial and owner, and add a note such as `Charger received; good condition.` Confirm only once the device is physically received.
+4. Verify the device is **Unassigned**, disappears from its former owner's personal list, and history has **RETURNED** with the note and admin identity. Use a separate browser profile to watch the owner's page update live.
+5. Assign the returned device again. It should be selectable in the directory and gain a new **ASSIGNED** entry; earlier rows must remain unchanged.
+6. For the stale-confirmation check, open a return form in one admin window, reassign that device in another, then submit the old form. Expect a clear conflict message. Cancel/refresh before trying again.
+7. As an employee, verify Inventory/history actions are unavailable and direct history/return API requests return `FORBIDDEN`.
+
+The new history table migration has already been applied here. Other checkouts should run `npm run db:deploy` and `npm run db:generate`. Existing assignments are not retroactively reconstructed; the log starts when this milestone is installed. No seed reset is required. History persists after `db:seed`, so sample-data reseeding is not a history-erasure mechanism.
+
+## Verified feature: employee links and personal equipment
 
 An administrator can now open **Accounts**, choose **Link employee** (or **Change link**), and select an employee record. Each employee can be linked to only one account. Links are explicit: matching email addresses never grant access automatically, and linking does not change the account's role or move equipment. Both admin and employee accounts can have links.
 
@@ -42,7 +64,7 @@ The Directory's assignment form now searches the full inventory and offers unass
 6. Return to **Inventory** and filter **Assigned**. Edit the device's model, save, and verify its owner is unchanged. Reload to confirm persistence.
 7. Sign in with an employee account. The Inventory navigation should be absent; opening `#inventory` directly should show an access-denied message. Backend inventory requests must return `FORBIDDEN` too.
 
-The inventory milestone has been verified. Returns, retirement, assignment history, invitations, and session-cookie changes remain separate future milestones.
+The inventory milestone has been verified. Returns and assignment history are now available in the current milestone; retirement, invitations, and session-cookie changes remain future work.
 
 ## Start locally
 
@@ -82,6 +104,7 @@ Signing in or registering creates an eight-hour database session and a signed HS
 - **My equipment:** personal devices and owner-scoped live list updates, based on an explicit account/employee link.
 - **Assignment / employee creation:** admin-only mutations enforced by the server.
 - **Inventory:** administrators can list/search all devices, filter by assignment status, and add/edit device metadata.
+- **Returns/history:** administrators can return received equipment and review the append-only assignment audit trail. Employees receive only personal list-change notifications.
 - **Accounts:** administrators can view registered users/roles and link or unlink employee records; the UI does not expose role escalation or account deletion.
 - **My account:** edit your name or change your password. Email is a read-only sign-in identifier.
 - **Sign out:** revokes the current server session and closes its active WebSockets; the frontend clears the token and Apollo cache.
@@ -135,7 +158,7 @@ mutation SignOut { signOut }
 
 HTTP requests use `Authorization: Bearer <session token>`. WebSocket clients pass `{ "authToken": "<session token>" }` in connection parameters. The website manages this automatically. Sandbox introspection is public in development, but directory data requires a session. Invalid supplied tokens fail context creation with HTTP 401 and `UNAUTHENTICATED`. Resolver access failures return GraphQL `UNAUTHENTICATED` or `FORBIDDEN`; missing records use `NOT_FOUND`; invalid input uses `BAD_USER_INPUT`.
 
-Equipment choices come from the admin-only paginated `equipmentInventory` query. `createEquipment` and `updateEquipment` accept `EquipmentInput` (`type`, `model`, `serialNumber`). Inventory changes and assignment mutations refresh active inventory queries. Metadata edits do not publish assignment events; use Refresh in another browser to see edits. Reassignment publishes after its transaction commits, refreshes the frontend directory, and invalidates affected loader caches. Every relationship batches through a request/operation-scoped DataLoader; subscription caches clear for each event.
+Equipment choices come from the admin-only paginated `equipmentInventory` query. `createEquipment` and `updateEquipment` accept `EquipmentInput` (`type`, `model`, `serialNumber`). `returnEquipment` requires `equipmentId` and `expectedEmployeeId`, and accepts optional `notes`. `equipmentHistory(equipmentId, offset, limit)` returns all/device-specific paginated history. `equipmentReturned` is the detailed admin-only return subscription; owners receive private `myEquipmentChanged` notifications. Inventory/assignment/return mutations refresh active inventory and history queries. Metadata edits do not publish assignment events; use Refresh in another admin browser to see edits. Ownership events publish after their transaction commits and invalidate affected loader caches. Every relationship batches through a request/operation-scoped DataLoader; subscription caches clear for each event.
 
 PubSub and session-close notifications are process-local, without replay or guaranteed delivery across process crashes. Use a shared broker/session-revocation channel for multiple replicas, and an outbox if guaranteed assignment-event delivery is required.
 
@@ -150,7 +173,7 @@ This is a working internal POC, not yet ready for unrestricted public use. The t
 | Origins and transport | Development CORS is permissive; WebSocket origins are not allowlisted. Local development uses HTTP/WS. | Configure explicit trusted origins for HTTP and WebSockets and terminate HTTPS/WSS at the deployment boundary. |
 | Data visibility | Equipment is now owner/admin-only and events are filtered. Basic names, business emails, roles, and teams remain workspace-wide; public registration still grants access to those basic fields. | Close registration through invitations/approval; add finer directory-field or team-specific permissions if organizational requirements demand them. |
 | Employee/team management | Employee creation exists as an admin API; there is no complete onboarding/edit/deactivation UI. | Add employee/team management screens and soft deactivation while preserving historical references. |
-| Equipment lifecycle | Add, edit, search, assignment, and reassignment work. Return, retirement, condition tracking, and audit history are not implemented. | Add explicit return/retirement actions and an append-only audit trail recording actor, time, and prior/new owner. |
+| Equipment lifecycle/audit | Add/edit/search, assignment/reassignment, returns, and assignment history work. Retirement, structured condition tracking, and general account/security auditing remain absent. Existing pre-milestone assignments have no historical reconstruction. | Add retirement/condition workflows and broader audit events. Define retention/access rules and off-host immutable audit export if stronger tamper resistance is needed. |
 | Employee requests | Employees cannot request devices or track approvals. | Add equipment requests, admin approvals, and status notifications after account/employee linking. |
 | Account administration | Admins can list accounts but cannot invite, deactivate, or perform account recovery. | Add invitations, deactivation with session revocation, and controlled recovery; protect the last active administrator. |
 | Password recovery | No email verification or forgotten-password email flow. | Integrate an email provider and hashed, expiring, single-use verification/reset tokens; do not email passwords. |
@@ -167,8 +190,8 @@ Keep `DATABASE_URL` pointed at a writable **persistent local disk**, not ephemer
 ### Planned milestones
 
 1. **Equipment inventory — implemented and verified.**
-2. **Employee/account linking and personal equipment visibility — implemented, ready for verification.**
-3. Assignment return/history and audit logging.
+2. **Employee/account linking and personal equipment visibility — implemented and verified.**
+3. **Assignment returns and assignment audit history — implemented, ready for verification.**
 4. Invitation-based access and account deactivation.
 5. Browser cookie sessions, trusted origins, and remaining security hardening.
 6. Employee/team management and equipment request/approval workflows.

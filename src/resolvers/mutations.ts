@@ -3,7 +3,20 @@ import { badInput, databaseError, notFound } from '../errors.js';
 import { requireAdmin } from '../auth.js';
 import { register, signIn, signOut, changePassword, sessionUser, validateName, throttleAuthentication, sessionEvents } from '../accounts.js';
 import { equipmentInput } from '../inventory.js';
+import { changeAssignment } from '../equipment-lifecycle.js';
 export const mutations: MutationResolvers = {
+  returnEquipment: async (_, { equipmentId, expectedEmployeeId, notes }, { db, user, loaders, pubsub }) => {
+    requireAdmin(user);
+    try {
+      const result = await changeAssignment(db, user, equipmentId, null, expectedEmployeeId, notes);
+      if (result.previous.assignedToId) loaders.equipment.clear(result.previous.assignedToId);
+      if (result.changed) {
+        await pubsub.publish('EQUIPMENT_RETURNED', { equipmentReturned: result.equipment });
+        await pubsub.publish('MY_EQUIPMENT_CHANGED', { employeeIds: result.previous.assignedToId ? [result.previous.assignedToId] : [] });
+      }
+      return result.equipment;
+    } catch (error) { databaseError(error); }
+  },
   linkAccountToEmployee: async (_, { userId, employeeId }, { db, user }) => {
     requireAdmin(user);
     try {
@@ -63,17 +76,13 @@ export const mutations: MutationResolvers = {
   assignEquipment: async (_, { employeeId, equipmentId }, { db, loaders, user, pubsub }) => {
     requireAdmin(user);
     try {
-      const { previous, equipment } = await db.$transaction(async tx => {
-        if (!await tx.employee.findUnique({ where: { id: employeeId } })) throw notFound('Employee', employeeId);
-        const previous = await tx.equipment.findUnique({ where: { id: equipmentId } });
-        if (!previous) throw notFound('Equipment', equipmentId);
-        const equipment = await tx.equipment.update({ where: { id: equipmentId }, data: { assignedToId: employeeId } });
-        return { previous, equipment };
-      });
+      const { previous, equipment, changed } = await changeAssignment(db, user, equipmentId, employeeId);
       if (previous.assignedToId) loaders.equipment.clear(previous.assignedToId);
       loaders.equipment.clear(employeeId);
-      await pubsub.publish('EQUIPMENT_ASSIGNED', { equipmentAssigned: equipment });
-      await pubsub.publish('MY_EQUIPMENT_CHANGED', { employeeIds: [...new Set([previous.assignedToId, employeeId].filter((id): id is string => id !== null))] });
+      if (changed) {
+        await pubsub.publish('EQUIPMENT_ASSIGNED', { equipmentAssigned: equipment });
+        await pubsub.publish('MY_EQUIPMENT_CHANGED', { employeeIds: [...new Set([previous.assignedToId, employeeId].filter((id): id is string => id !== null))] });
+      }
       return equipment;
     } catch (error) { databaseError(error); }
   },

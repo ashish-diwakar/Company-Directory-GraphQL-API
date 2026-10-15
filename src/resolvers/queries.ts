@@ -4,6 +4,18 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { requireUser, requireAdmin } from '../auth.js';
 import { sessionUser } from '../accounts.js';
 export const queries: QueryResolvers = {
+  equipmentHistory: async (_, { equipmentId, offset, limit }, { db, user }) => {
+    requireAdmin(user);
+    const start = offset ?? 0;
+    const size = limit ?? 20;
+    if (start < 0 || size < 1 || size > 100) throw badInput('Offset must be nonnegative and limit must be between 1 and 100.');
+    const where = equipmentId ? { equipmentId } : {};
+    const [total, items] = await db.$transaction([
+      db.assignmentEvent.count({ where }),
+      db.assignmentEvent.findMany({ where, skip: start, take: size, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+    ]);
+    return { total, items };
+  },
   myEquipment: async (_, __, { db, user, loaders }) => {
     const account = await sessionUser(db, user);
     return account.employeeId ? loaders.equipment.load(account.employeeId) : [];

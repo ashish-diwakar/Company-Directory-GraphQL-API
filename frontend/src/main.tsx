@@ -7,6 +7,7 @@ import './styles.css';
 import './auth.css';
 import './inventory.css';
 import './linking.css';
+import './history.css';
 function Root() {
   const [session, setSession] = useState({ client, generation: 0 });
   useEffect(() => {
