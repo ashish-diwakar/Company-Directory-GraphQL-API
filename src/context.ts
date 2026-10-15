@@ -2,9 +2,26 @@ import DataLoader from 'dataloader';
 import { db as sharedDb } from './db.js';
 import type { PrismaClient, Employee, Equipment, Team } from './generated/prisma/client.js';
 import { notFound } from './errors.js';
-export function createContext(db: PrismaClient = sharedDb) {
+import type { AuthUser } from './auth.js';
+import { pubsub } from './pubsub.js';
+
+export interface GraphQLContext {
+  db: PrismaClient;
+  user?: AuthUser | null;
+  pubsub: typeof pubsub;
+  loaders: {
+    team: DataLoader<string, Team>;
+    employee: DataLoader<string, Employee | null>;
+    equipment: DataLoader<string, Equipment[]>;
+    members: DataLoader<string, Employee[]>;
+  };
+}
+
+export function createContext(db: PrismaClient = sharedDb, user: AuthUser | null = null): GraphQLContext {
   return {
     db,
+    user,
+    pubsub,
     loaders: {
       team: new DataLoader<string, Team>(async (ids: readonly string[]) => {
         const rows = await db.team.findMany({ where: { id: { in: [...ids] } } });
@@ -38,5 +55,5 @@ export function createContext(db: PrismaClient = sharedDb) {
     },
   };
 }
-export type Context = ReturnType<typeof createContext>;
+export type Context = GraphQLContext;
 

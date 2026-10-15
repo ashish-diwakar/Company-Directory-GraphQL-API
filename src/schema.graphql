@@ -39,3 +39,7 @@ type Mutation {
   createEmployee(input: PublicEmployeeInput!): Employee!
   assignEquipment(employeeId: ID!, equipmentId: ID!): Equipment!
 }
+
+type Subscription {
+  equipmentAssigned: Equipment!
+}

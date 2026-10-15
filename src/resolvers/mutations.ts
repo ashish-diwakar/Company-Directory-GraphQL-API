@@ -1,5 +1,6 @@
 import type { MutationResolvers } from '../__generated__/resolvers-types.js';
 import { badInput, databaseError, notFound } from '../errors.js';
+import { requireAdmin } from '../auth.js';
 export const mutations: MutationResolvers = {
   createEmployee: async (_, { input }, { db, loaders }) => {
     const name = input.name.trim();
@@ -17,7 +18,8 @@ export const mutations: MutationResolvers = {
       return employee;
     } catch (error) { databaseError(error); }
   },
-  assignEquipment: async (_, { employeeId, equipmentId }, { db, loaders }) => {
+  assignEquipment: async (_, { employeeId, equipmentId }, { db, loaders, user, pubsub }) => {
+    requireAdmin(user);
     try {
       const { previous, equipment } = await db.$transaction(async tx => {
         if (!await tx.employee.findUnique({ where: { id: employeeId } })) throw notFound('Employee', employeeId);
@@ -28,6 +30,7 @@ export const mutations: MutationResolvers = {
       });
       if (previous.assignedToId) loaders.equipment.clear(previous.assignedToId);
       loaders.equipment.clear(employeeId);
+      await pubsub.publish('EQUIPMENT_ASSIGNED', { equipmentAssigned: equipment });
       return equipment;
     } catch (error) { databaseError(error); }
   },

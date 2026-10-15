@@ -78,6 +78,11 @@ export type QueryEmployeesArgs = {
   role?: InputMaybe<Scalars['String']['input']>;
 };
 
+export type Subscription = {
+  __typename?: 'Subscription';
+  equipmentAssigned: Equipment;
+};
+
 export type Team = {
   __typename?: 'Team';
   department: Scalars['String']['output'];
@@ -167,6 +172,7 @@ export type ResolversTypes = {
   PublicEmployeeInput: PublicEmployeeInput;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
+  Subscription: ResolverTypeWrapper<Record<PropertyKey, never>>;
   Team: ResolverTypeWrapper<TeamRecord>;
 };
 
@@ -180,6 +186,7 @@ export type ResolversParentTypes = {
   PublicEmployeeInput: PublicEmployeeInput;
   Query: Record<PropertyKey, never>;
   String: Scalars['String']['output'];
+  Subscription: Record<PropertyKey, never>;
   Team: TeamRecord;
 };
 
@@ -211,6 +218,10 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   teams?: Resolver<Array<ResolversTypes['Team']>, ParentType, ContextType>;
 };
 
+export type SubscriptionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = {
+  equipmentAssigned?: SubscriptionResolver<ResolversTypes['Equipment'], "equipmentAssigned", ParentType, ContextType>;
+};
+
 export type TeamResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Team'] = ResolversParentTypes['Team']> = {
   department?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
@@ -223,6 +234,7 @@ export type Resolvers<ContextType = Context> = {
   Equipment?: EquipmentResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
+  Subscription?: SubscriptionResolvers<ContextType>;
   Team?: TeamResolvers<ContextType>;
 };
 
