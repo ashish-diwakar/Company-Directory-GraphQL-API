@@ -19,6 +19,8 @@ model User {
   role AccountRole @default(EMPLOYEE)
   createdAt DateTime @default(now())
   sessions Session[]
+  employeeId String? @unique
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 }
 
 model Session {
@@ -48,6 +50,7 @@ model Employee {
   teamId String
   team Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
   assignedEquipment Equipment[]
+  account User?
   @@index([teamId])
   @@index([role])
 }

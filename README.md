@@ -4,7 +4,29 @@ A React workspace for people, teams, and equipment, backed by Apollo Server 4, P
 
 **POC scope:** one organization running one API instance with a persistent SQLite database. SQLite remains the supported database; the remaining improvements will be delivered one feature at a time for manual verification.
 
-## Latest feature: equipment inventory
+## Latest feature: employee links and personal equipment
+
+An administrator can now open **Accounts**, choose **Link employee** (or **Change link**), and select an employee record. Each employee can be linked to only one account. Links are explicit: matching email addresses never grant access automatically, and linking does not change the account's role or move equipment. Both admin and employee accounts can have links.
+
+Every signed-in account has a **My equipment** page. Linked users see only devices assigned to their linked employee; unlinked users see guidance to contact an admin. Employees still browse basic people/team information, but other employees' equipment lists are empty in the API and displayed as private in the UI. Nested team/member queries follow the same rule. Admins retain full directory and inventory visibility.
+
+Assignment events are now filtered server-side: admins receive all assignment details, while employees receive only events for their linked employee. A separate `myEquipmentChanged` subscription sends only a boolean notification to the affected prior/new owners, allowing their lists to refresh after reassignment without exposing the new owner or another person's device details. Assigned-device metadata edits also refresh the current owner's list.
+
+Changing/removing a link immediately closes that account's active WebSockets. Its sessions remain valid, and every new request reads the latest link from SQLite. Refresh/reconnect the account holder's workspace afterward. The filter rechecks the live session and link on every event.
+
+### Verify this milestone
+
+1. Sign in as admin. Open **Accounts** and link an employee account to a directory employee, for example Asha Patel.
+2. Use a separate browser profile/incognito window for that employee account. Tabs in the same profile share localStorage and therefore share sign-in state.
+3. Refresh after linking. Open **My equipment** and verify it shows only that employee's devices. In **Directory**, other employees' cards should say their equipment details are private.
+4. In the admin window, assign an unassigned device to the linked employee. The employee's My equipment list should update automatically.
+5. Reassign that device to a different employee. The first employee's list should update and remove it; their notification must not expose the new owner's name or device details.
+6. Try linking a second account to the same employee. The UI disables already-linked choices, and the API rejects a duplicate link. A non-admin cannot perform linking or view the account list.
+7. Remove the link using **No employee (unlink)**. Refresh the employee's workspace: My equipment should show the unlinked-account message, and directory equipment must remain private. Equipment ownership and account role should be unchanged.
+
+The SQLite migration adds an optional unique account/employee foreign key and preserves accounts/directory records. It has already been applied in this workspace; other checkouts should run `npm run db:deploy` and `npm run db:generate`. Existing accounts start unlinked. Do not reseed to install this feature: reseeding deletes/recreates directory employees and will clear their links.
+
+## Verified feature: equipment inventory
 
 Administrators now have an **Inventory** screen to list all devices, including unassigned stock, search by type/model/serial number, filter by assignment status, and add or edit device details. Results are paginated (20 per screen; the API allows at most 100 per request). Newly created devices are unassigned. Editing details preserves the current owner. Serial numbers are unique, trimmed, and normalized to uppercase; type, model, and serial number each allow 1–100 characters.
 
@@ -20,7 +42,7 @@ The Directory's assignment form now searches the full inventory and offers unass
 6. Return to **Inventory** and filter **Assigned**. Edit the device's model, save, and verify its owner is unchanged. Reload to confirm persistence.
 7. Sign in with an employee account. The Inventory navigation should be absent; opening `#inventory` directly should show an access-denied message. Backend inventory requests must return `FORBIDDEN` too.
 
-Please verify this milestone before moving to the next one. Returns, retirement, assignment history, invitations, and session-cookie changes are separate future milestones.
+The inventory milestone has been verified. Returns, retirement, assignment history, invitations, and session-cookie changes remain separate future milestones.
 
 ## Start locally
 
@@ -56,16 +78,17 @@ Passwords must contain 12–128 characters and are stored as asynchronously deri
 
 Signing in or registering creates an eight-hour database session and a signed HS256 JWT containing its identifier. Each HTTP request and WebSocket operation validates the signature, expiry, live session, and current account role in SQLite. Old manually generated demo tokens and bypass flags are no longer accepted by the network API.
 
-- **Directory:** authenticated accounts can browse people and teams and receive live assignment updates.
+- **Directory:** authenticated accounts can browse basic people/team details. Employees see only their linked employee's equipment; admins see all equipment.
+- **My equipment:** personal devices and owner-scoped live list updates, based on an explicit account/employee link.
 - **Assignment / employee creation:** admin-only mutations enforced by the server.
 - **Inventory:** administrators can list/search all devices, filter by assignment status, and add/edit device metadata.
-- **Accounts:** administrators can view registered users and their roles; the UI does not expose role escalation or account deletion.
+- **Accounts:** administrators can view registered users/roles and link or unlink employee records; the UI does not expose role escalation or account deletion.
 - **My account:** edit your name or change your password. Email is a read-only sign-in identifier.
 - **Sign out:** revokes the current server session and closes its active WebSockets; the frontend clears the token and Apollo cache.
 - **Change password:** verifies the current password and revokes every session for that account, requiring a new sign-in on every device.
 - **Session expiry:** the frontend returns to sign-in; the backend rejects expired requests and closes expired WebSockets.
 
-Passwords, tokens, and session identifiers are never exposed in the public user type. Login accounts remain separate from employee directory entries. Email verification and email-based password recovery are not configured; the account-help screen explains this instead of simulating an email workflow. Keep the first administrator's credentials safe.
+Passwords and session identifiers are never exposed in the public user type. Tokens are returned only when creating a session. Login accounts remain separate from employee directory entries, with optional admin-managed one-to-one links. Email verification and email-based password recovery are not configured; the account-help screen explains this instead of simulating an email workflow. Keep the first administrator's credentials safe.
 
 The frontend stores its JWT under `localStorage.token` and restores the session using `me`. Sign-in/out recreates the WebSocket transport and Apollo client so cached data and subscription identities cannot cross sessions. Tabs synchronize local token changes. Use HTTPS/WSS when deployed and review the localStorage/XSS tradeoff for your environment; this project does not implement an HttpOnly cookie session flow.
 
@@ -125,7 +148,7 @@ This is a working internal POC, not yet ready for unrestricted public use. The t
 | Registration | Anyone who can reach registration may create an employee account. The first successful registration receives admin access. | Complete initial setup privately, then implement admin invitations or approval and close public registration. |
 | Browser sessions | JWTs are in localStorage, accessible to scripts on this origin. Sessions are revocable, but XSS could steal a live token. | Move browser authentication to HttpOnly cookies, with Secure/SameSite attributes, CSRF validation, and authenticated WebSocket setup. |
 | Origins and transport | Development CORS is permissive; WebSocket origins are not allowlisted. Local development uses HTTP/WS. | Configure explicit trusted origins for HTTP and WebSockets and terminate HTTPS/WSS at the deployment boundary. |
-| Data visibility | Signed-in employees can currently read other employees' equipment/serial numbers and receive workspace-wide assignment events. | Link accounts to employee records and enforce owner-aware fields/events; keep only basic directory information shared. |
+| Data visibility | Equipment is now owner/admin-only and events are filtered. Basic names, business emails, roles, and teams remain workspace-wide; public registration still grants access to those basic fields. | Close registration through invitations/approval; add finer directory-field or team-specific permissions if organizational requirements demand them. |
 | Employee/team management | Employee creation exists as an admin API; there is no complete onboarding/edit/deactivation UI. | Add employee/team management screens and soft deactivation while preserving historical references. |
 | Equipment lifecycle | Add, edit, search, assignment, and reassignment work. Return, retirement, condition tracking, and audit history are not implemented. | Add explicit return/retirement actions and an append-only audit trail recording actor, time, and prior/new owner. |
 | Employee requests | Employees cannot request devices or track approvals. | Add equipment requests, admin approvals, and status notifications after account/employee linking. |
@@ -143,14 +166,14 @@ Keep `DATABASE_URL` pointed at a writable **persistent local disk**, not ephemer
 
 ### Planned milestones
 
-1. **Equipment inventory — implemented, ready for verification.**
-2. Employee/account linking and personal equipment visibility.
+1. **Equipment inventory — implemented and verified.**
+2. **Employee/account linking and personal equipment visibility — implemented, ready for verification.**
 3. Assignment return/history and audit logging.
 4. Invitation-based access and account deactivation.
 5. Browser cookie sessions, trusted origins, and remaining security hardening.
 6. Employee/team management and equipment request/approval workflows.
 
-The order can be adjusted after each verification. SQLite stays in place throughout these milestones. Do not expose the POC broadly while the access, origin, and data-visibility limitations above remain.
+The order can be adjusted after each verification. SQLite stays in place throughout these milestones. Do not expose the POC broadly while the registration, origin, and browser-session limitations above remain.
 
 ## Commands and verification
 

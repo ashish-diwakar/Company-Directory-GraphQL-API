@@ -4,6 +4,10 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { requireUser, requireAdmin } from '../auth.js';
 import { sessionUser } from '../accounts.js';
 export const queries: QueryResolvers = {
+  myEquipment: async (_, __, { db, user, loaders }) => {
+    const account = await sessionUser(db, user);
+    return account.employeeId ? loaders.equipment.load(account.employeeId) : [];
+  },
   equipmentInventory: async (_, { search, assigned, offset = 0, limit = 20 }, { db, user }) => {
     requireAdmin(user);
     const start = offset ?? 0;

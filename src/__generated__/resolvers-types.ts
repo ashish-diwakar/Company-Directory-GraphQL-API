@@ -68,6 +68,7 @@ export type Mutation = {
   changePassword: Scalars['Boolean']['output'];
   createEmployee: Employee;
   createEquipment: Equipment;
+  linkAccountToEmployee: User;
   register: AuthPayload;
   signIn: AuthPayload;
   signOut: Scalars['Boolean']['output'];
@@ -95,6 +96,12 @@ export type MutationCreateEmployeeArgs = {
 
 export type MutationCreateEquipmentArgs = {
   input: EquipmentInput;
+};
+
+
+export type MutationLinkAccountToEmployeeArgs = {
+  employeeId?: InputMaybe<Scalars['ID']['input']>;
+  userId: Scalars['ID']['input'];
 };
 
 
@@ -132,6 +139,7 @@ export type Query = {
   employees: Array<Employee>;
   equipmentInventory: EquipmentPage;
   me?: Maybe<User>;
+  myEquipment: Array<Equipment>;
   teams: Array<Team>;
   users: Array<User>;
 };
@@ -163,6 +171,7 @@ export type RegisterInput = {
 export type Subscription = {
   __typename?: 'Subscription';
   equipmentAssigned: Equipment;
+  myEquipmentChanged: Scalars['Boolean']['output'];
 };
 
 export type Team = {
@@ -176,6 +185,7 @@ export type Team = {
 export type User = {
   __typename?: 'User';
   email: Scalars['String']['output'];
+  employee?: Maybe<Employee>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   role: AccountRole;
@@ -326,6 +336,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   changePassword?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationChangePasswordArgs, 'currentPassword' | 'newPassword'>>;
   createEmployee?: Resolver<ResolversTypes['Employee'], ParentType, ContextType, RequireFields<MutationCreateEmployeeArgs, 'input'>>;
   createEquipment?: Resolver<ResolversTypes['Equipment'], ParentType, ContextType, RequireFields<MutationCreateEquipmentArgs, 'input'>>;
+  linkAccountToEmployee?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationLinkAccountToEmployeeArgs, 'userId'>>;
   register?: Resolver<ResolversTypes['AuthPayload'], ParentType, ContextType, RequireFields<MutationRegisterArgs, 'input'>>;
   signIn?: Resolver<ResolversTypes['AuthPayload'], ParentType, ContextType, RequireFields<MutationSignInArgs, 'email' | 'password'>>;
   signOut?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
@@ -338,12 +349,14 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   employees?: Resolver<Array<ResolversTypes['Employee']>, ParentType, ContextType, Partial<QueryEmployeesArgs>>;
   equipmentInventory?: Resolver<ResolversTypes['EquipmentPage'], ParentType, ContextType, RequireFields<QueryEquipmentInventoryArgs, 'limit' | 'offset'>>;
   me?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType>;
+  myEquipment?: Resolver<Array<ResolversTypes['Equipment']>, ParentType, ContextType>;
   teams?: Resolver<Array<ResolversTypes['Team']>, ParentType, ContextType>;
   users?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
 };
 
 export type SubscriptionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = {
   equipmentAssigned?: SubscriptionResolver<ResolversTypes['Equipment'], "equipmentAssigned", ParentType, ContextType>;
+  myEquipmentChanged?: SubscriptionResolver<ResolversTypes['Boolean'], "myEquipmentChanged", ParentType, ContextType>;
 };
 
 export type TeamResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Team'] = ResolversParentTypes['Team']> = {
@@ -355,6 +368,7 @@ export type TeamResolvers<ContextType = Context, ParentType extends ResolversPar
 
 export type UserResolvers<ContextType = Context, ParentType extends ResolversParentTypes['User'] = ResolversParentTypes['User']> = {
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  employee?: Resolver<Maybe<ResolversTypes['Employee']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   role?: Resolver<ResolversTypes['AccountRole'], ParentType, ContextType>;

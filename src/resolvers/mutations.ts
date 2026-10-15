@@ -1,21 +1,37 @@
 import type { MutationResolvers } from '../__generated__/resolvers-types.js';
 import { badInput, databaseError, notFound } from '../errors.js';
 import { requireAdmin } from '../auth.js';
-import { register, signIn, signOut, changePassword, sessionUser, validateName, throttleAuthentication } from '../accounts.js';
+import { register, signIn, signOut, changePassword, sessionUser, validateName, throttleAuthentication, sessionEvents } from '../accounts.js';
 import { equipmentInput } from '../inventory.js';
 export const mutations: MutationResolvers = {
+  linkAccountToEmployee: async (_, { userId, employeeId }, { db, user }) => {
+    requireAdmin(user);
+    try {
+      const result = await db.$transaction(async tx => {
+        if (!await tx.user.findUnique({ where: { id: userId } })) throw notFound('Account', userId);
+        if (employeeId && !await tx.employee.findUnique({ where: { id: employeeId } })) throw notFound('Employee', employeeId);
+        const account = await tx.user.update({ where: { id: userId }, data: { employeeId: employeeId ?? null } });
+        const sessions = await tx.session.findMany({ where: { userId } });
+        return { account, sessions };
+      });
+      // Close existing streams so they cannot keep the former employee identity.
+      sessionEvents.emit('revoked', result.sessions.map(session => session.id));
+      return result.account;
+    } catch (error) { databaseError(error, 'This employee is already linked to another account.'); }
+  },
   createEquipment: async (_, { input }, { db, user }) => {
     requireAdmin(user);
     const data = equipmentInput(input);
     try { return await db.equipment.create({ data }); }
     catch (error) { databaseError(error, 'An equipment item with this serial number already exists.'); }
   },
-  updateEquipment: async (_, { id, input }, { db, user, loaders }) => {
+  updateEquipment: async (_, { id, input }, { db, user, loaders, pubsub }) => {
     requireAdmin(user);
     const data = equipmentInput(input);
     try {
       const equipment = await db.equipment.update({ where: { id }, data });
       if (equipment.assignedToId) loaders.equipment.clear(equipment.assignedToId);
+      if (equipment.assignedToId) await pubsub.publish('MY_EQUIPMENT_CHANGED', { employeeIds: [equipment.assignedToId] });
       return equipment;
     } catch (error) { databaseError(error, 'An equipment item with this serial number already exists.'); }
   },
@@ -57,6 +73,7 @@ export const mutations: MutationResolvers = {
       if (previous.assignedToId) loaders.equipment.clear(previous.assignedToId);
       loaders.equipment.clear(employeeId);
       await pubsub.publish('EQUIPMENT_ASSIGNED', { equipmentAssigned: equipment });
+      await pubsub.publish('MY_EQUIPMENT_CHANGED', { employeeIds: [...new Set([previous.assignedToId, employeeId].filter((id): id is string => id !== null))] });
       return equipment;
     } catch (error) { databaseError(error); }
   },

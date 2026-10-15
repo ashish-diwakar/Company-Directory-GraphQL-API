@@ -1,4 +1,7 @@
 import { PubSub } from 'graphql-subscriptions';
 import type { Equipment } from './generated/prisma/client.js';
 
-export const pubsub = new PubSub<{ EQUIPMENT_ASSIGNED: { equipmentAssigned: Equipment } }>();
+export const pubsub = new PubSub<{
+  EQUIPMENT_ASSIGNED: { equipmentAssigned: Equipment };
+  MY_EQUIPMENT_CHANGED: { employeeIds: string[] };
+}>();
