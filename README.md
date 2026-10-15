@@ -4,7 +4,26 @@ A React workspace for people, teams, and equipment, backed by Apollo Server 4, P
 
 **POC scope:** one organization running one API instance with a persistent SQLite database. SQLite remains the supported database; the remaining improvements will be delivered one feature at a time for manual verification.
 
-## Latest feature: invitations and account deactivation
+## Latest feature: employee management and account onboarding
+
+Administrators now have an **Employees** screen to add/edit employees, search by name/work email/job title, filter by team, and browse paginated results. Employee job titles are directory labels, not login permission roles. Edits preserve the employee ID, account link, assigned equipment, and historical audit snapshots. Changing a directory work email or name does not change the linked login email/profile.
+
+For a new account with no suitable employee record, open **Accounts → Create employee**. The form starts with the account name/email; choose a job title and team, then **Create and link employee**. Both operations commit together. Duplicate work emails, accounts that are already linked/inactive, missing teams, or failed links leave no stray employee record. If an employee with that email already exists, use **Link employee** instead of creating a duplicate.
+
+The employee form includes **Add a team** so a fresh workspace can onboard without seeded teams. Team editing/merging/deletion, employee offboarding/deletion, and role delegation remain separate future work. No automatic email-based employee linking has been introduced.
+
+### Verify this milestone
+
+1. As admin, open **Employees → Add employee**. Fill name, work email, job title, and team; save and find the new person in Directory and the assignment dropdown.
+2. If no appropriate team exists, choose **Add a team**, enter its name/department, and save it. The new team should be selected automatically in the employee form.
+3. Open **Accounts** for an active, unlinked account. Choose **Create employee**, complete the prefilled form, and save. Verify its employee link appears immediately. Refresh that account's workspace to enable My equipment.
+4. In Employees, edit a linked employee's name, job title, or team. Verify the linked account and equipment assignments remain intact, while Directory reflects the changes. Login email and ADMIN/EMPLOYEE permissions must not change.
+5. Try an existing work email or invalid/blank fields. Expect a clear error and no partial employee/link changes. Creating for an account that is already linked or inactive is rejected.
+6. Sign in as an employee account. Employees management navigation should be absent, and directly opening `#employees` should deny access. Create/edit/manage APIs are admin-only too.
+
+No SQLite schema migration or seed reset is required for this milestone. New APIs are `employeeManagement`, `updateEmployee`, `createEmployeeForAccount`, and basic `createTeam`; the existing `createEmployee` API uses the same validation. Existing invitations/deactivation behavior is unchanged. Please verify this milestone before continuing.
+
+## Verified feature: invitations and account deactivation
 
 After the first administrator registers, public registration closes. Admins now create invitations in **Accounts → Invite a colleague**. Each invitation is bound to one normalized email address, expires after seven days, and can be used once. Only a SHA-256 hash of its random secret is stored. The administrator sees the link only when creating it; share it privately with the intended colleague. Email sending is not configured.
 
@@ -123,6 +142,7 @@ Signing in or registering creates an eight-hour database session and a signed HS
 - **My equipment:** personal devices and owner-scoped live list updates, based on an explicit account/employee link.
 - **Assignment / employee creation:** admin-only mutations enforced by the server.
 - **Inventory:** administrators can list/search all devices, filter by assignment status, and add/edit device metadata.
+- **Employees:** administrators can create/edit/search employees, select/create teams, and create-and-link employee records from Accounts. No employee deletion is performed.
 - **Returns/history:** administrators can return received equipment and review the append-only assignment audit trail. Employees receive only personal list-change notifications.
 - **Accounts:** administrators can view registered users/roles and link or unlink employee records; the UI does not expose role escalation or account deletion.
 - **Invitations/account status:** administrators create/revoke invitations and deactivate/reactivate employee accounts. Inactive accounts cannot sign in or use existing sessions. Reactivation requires a fresh sign-in.
@@ -192,7 +212,7 @@ This is a working internal POC, not yet ready for unrestricted public use. The t
 | Browser sessions | JWTs are in localStorage, accessible to scripts on this origin. Sessions are revocable, but XSS could steal a live token. | Move browser authentication to HttpOnly cookies, with Secure/SameSite attributes, CSRF validation, and authenticated WebSocket setup. |
 | Origins and transport | Development CORS is permissive; WebSocket origins are not allowlisted. Local development uses HTTP/WS. | Configure explicit trusted origins for HTTP and WebSockets and terminate HTTPS/WSS at the deployment boundary. |
 | Data visibility | Equipment is owner/admin-only and events are filtered. Invited active accounts can read basic names, business emails, roles, and teams workspace-wide. | Add finer directory-field or team-specific permissions if organizational requirements demand them. |
-| Employee/team management | Employee creation exists as an admin API; there is no complete onboarding/edit/deactivation UI. | Add employee/team management screens and soft deactivation while preserving historical references. |
+| Employee/team management | Employee creation/editing/search and account-onboarding screens now work, with basic team creation. Employee offboarding/deactivation/deletion, team editing/merging, and comprehensive organization management are not implemented. | Add an offboarding workflow that handles account access and device return explicitly, and team lifecycle management while preserving history. |
 | Equipment lifecycle/audit | Add/edit/search, assignment/reassignment, returns, and assignment history work. Retirement, structured condition tracking, and general account/security auditing remain absent. Existing pre-milestone assignments have no historical reconstruction. | Add retirement/condition workflows and broader audit events. Define retention/access rules and off-host immutable audit export if stronger tamper resistance is needed. |
 | Employee requests | Employees cannot request devices or track approvals. | Add equipment requests, admin approvals, and status notifications after account/employee linking. |
 | Account administration | Invitations, linking, deactivation/reactivation, and session revocation work. There is no role-promotion, account deletion, or account-recovery workflow. Deactivation does not return equipment automatically. | Add controlled recovery, role delegation with last-admin protection, and an explicit offboarding checklist if required. |
@@ -212,9 +232,10 @@ Keep `DATABASE_URL` pointed at a writable **persistent local disk**, not ephemer
 1. **Equipment inventory — implemented and verified.**
 2. **Employee/account linking and personal equipment visibility — implemented and verified.**
 3. **Assignment returns and assignment audit history — implemented and verified.**
-4. **Invitation-based access and account deactivation — implemented, ready for verification.**
-5. Browser cookie sessions, trusted origins, and remaining security hardening.
-6. Employee/team management and equipment request/approval workflows.
+4. **Invitation-based access and account deactivation — implemented and verified.**
+5. **Employee creation/editing and account onboarding — implemented, ready for verification.** (Prioritized to unblock new-account linking.)
+6. Browser cookie sessions, trusted origins, and remaining security hardening.
+7. Employee offboarding/team lifecycle and equipment request/approval workflows.
 
 The order can be adjusted after each verification. SQLite stays in place throughout these milestones. Do not expose the POC broadly before addressing bootstrap protection, trusted origins, browser sessions, and dependency maintenance.
 

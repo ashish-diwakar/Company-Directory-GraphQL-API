@@ -71,6 +71,12 @@ export type Employee = {
   team: Team;
 };
 
+export type EmployeePage = {
+  __typename?: 'EmployeePage';
+  items: Array<Employee>;
+  total: Scalars['Int']['output'];
+};
+
 export type Equipment = {
   __typename?: 'Equipment';
   assignedTo?: Maybe<Employee>;
@@ -119,8 +125,10 @@ export type Mutation = {
   assignEquipment: Equipment;
   changePassword: Scalars['Boolean']['output'];
   createEmployee: Employee;
+  createEmployeeForAccount: Employee;
   createEquipment: Equipment;
   createInvitation: InvitationPayload;
+  createTeam: Team;
   linkAccountToEmployee: User;
   register: AuthPayload;
   returnEquipment: Equipment;
@@ -128,6 +136,7 @@ export type Mutation = {
   setAccountActive: User;
   signIn: AuthPayload;
   signOut: Scalars['Boolean']['output'];
+  updateEmployee: Employee;
   updateEquipment: Equipment;
   updateProfile: User;
 };
@@ -150,6 +159,12 @@ export type MutationCreateEmployeeArgs = {
 };
 
 
+export type MutationCreateEmployeeForAccountArgs = {
+  input: PublicEmployeeInput;
+  userId: Scalars['ID']['input'];
+};
+
+
 export type MutationCreateEquipmentArgs = {
   input: EquipmentInput;
 };
@@ -157,6 +172,12 @@ export type MutationCreateEquipmentArgs = {
 
 export type MutationCreateInvitationArgs = {
   email: Scalars['String']['input'];
+};
+
+
+export type MutationCreateTeamArgs = {
+  department: Scalars['String']['input'];
+  name: Scalars['String']['input'];
 };
 
 
@@ -195,6 +216,12 @@ export type MutationSignInArgs = {
 };
 
 
+export type MutationUpdateEmployeeArgs = {
+  id: Scalars['ID']['input'];
+  input: PublicEmployeeInput;
+};
+
+
 export type MutationUpdateEquipmentArgs = {
   id: Scalars['ID']['input'];
   input: EquipmentInput;
@@ -215,6 +242,7 @@ export type PublicEmployeeInput = {
 export type Query = {
   __typename?: 'Query';
   employee?: Maybe<Employee>;
+  employeeManagement: EmployeePage;
   employees: Array<Employee>;
   equipmentHistory: AssignmentHistoryPage;
   equipmentInventory: EquipmentPage;
@@ -229,6 +257,14 @@ export type Query = {
 
 export type QueryEmployeeArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryEmployeeManagementArgs = {
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  search?: InputMaybe<Scalars['String']['input']>;
+  teamId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -369,6 +405,7 @@ export type ResolversTypes = {
   AuthPayload: ResolverTypeWrapper<Omit<AuthPayload, 'user'> & { user: ResolversTypes['User'] }>;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   Employee: ResolverTypeWrapper<EmployeeRecord>;
+  EmployeePage: ResolverTypeWrapper<Omit<EmployeePage, 'items'> & { items: Array<ResolversTypes['Employee']> }>;
   Equipment: ResolverTypeWrapper<EquipmentRecord>;
   EquipmentInput: EquipmentInput;
   EquipmentPage: ResolverTypeWrapper<Omit<EquipmentPage, 'items'> & { items: Array<ResolversTypes['Equipment']> }>;
@@ -394,6 +431,7 @@ export type ResolversParentTypes = {
   AuthPayload: Omit<AuthPayload, 'user'> & { user: ResolversParentTypes['User'] };
   Boolean: Scalars['Boolean']['output'];
   Employee: EmployeeRecord;
+  EmployeePage: Omit<EmployeePage, 'items'> & { items: Array<ResolversParentTypes['Employee']> };
   Equipment: EquipmentRecord;
   EquipmentInput: EquipmentInput;
   EquipmentPage: Omit<EquipmentPage, 'items'> & { items: Array<ResolversParentTypes['Equipment']> };
@@ -449,6 +487,11 @@ export type EmployeeResolvers<ContextType = Context, ParentType extends Resolver
   team?: Resolver<ResolversTypes['Team'], ParentType, ContextType>;
 };
 
+export type EmployeePageResolvers<ContextType = Context, ParentType extends ResolversParentTypes['EmployeePage'] = ResolversParentTypes['EmployeePage']> = {
+  items?: Resolver<Array<ResolversTypes['Employee']>, ParentType, ContextType>;
+  total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+};
+
 export type EquipmentResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Equipment'] = ResolversParentTypes['Equipment']> = {
   assignedTo?: Resolver<Maybe<ResolversTypes['Employee']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
@@ -485,8 +528,10 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   assignEquipment?: Resolver<ResolversTypes['Equipment'], ParentType, ContextType, RequireFields<MutationAssignEquipmentArgs, 'employeeId' | 'equipmentId'>>;
   changePassword?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationChangePasswordArgs, 'currentPassword' | 'newPassword'>>;
   createEmployee?: Resolver<ResolversTypes['Employee'], ParentType, ContextType, RequireFields<MutationCreateEmployeeArgs, 'input'>>;
+  createEmployeeForAccount?: Resolver<ResolversTypes['Employee'], ParentType, ContextType, RequireFields<MutationCreateEmployeeForAccountArgs, 'input' | 'userId'>>;
   createEquipment?: Resolver<ResolversTypes['Equipment'], ParentType, ContextType, RequireFields<MutationCreateEquipmentArgs, 'input'>>;
   createInvitation?: Resolver<ResolversTypes['InvitationPayload'], ParentType, ContextType, RequireFields<MutationCreateInvitationArgs, 'email'>>;
+  createTeam?: Resolver<ResolversTypes['Team'], ParentType, ContextType, RequireFields<MutationCreateTeamArgs, 'department' | 'name'>>;
   linkAccountToEmployee?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationLinkAccountToEmployeeArgs, 'userId'>>;
   register?: Resolver<ResolversTypes['AuthPayload'], ParentType, ContextType, RequireFields<MutationRegisterArgs, 'input'>>;
   returnEquipment?: Resolver<ResolversTypes['Equipment'], ParentType, ContextType, RequireFields<MutationReturnEquipmentArgs, 'equipmentId' | 'expectedEmployeeId'>>;
@@ -494,12 +539,14 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   setAccountActive?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationSetAccountActiveArgs, 'active' | 'userId'>>;
   signIn?: Resolver<ResolversTypes['AuthPayload'], ParentType, ContextType, RequireFields<MutationSignInArgs, 'email' | 'password'>>;
   signOut?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  updateEmployee?: Resolver<ResolversTypes['Employee'], ParentType, ContextType, RequireFields<MutationUpdateEmployeeArgs, 'id' | 'input'>>;
   updateEquipment?: Resolver<ResolversTypes['Equipment'], ParentType, ContextType, RequireFields<MutationUpdateEquipmentArgs, 'id' | 'input'>>;
   updateProfile?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationUpdateProfileArgs, 'name'>>;
 };
 
 export type QueryResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = {
   employee?: Resolver<Maybe<ResolversTypes['Employee']>, ParentType, ContextType, RequireFields<QueryEmployeeArgs, 'id'>>;
+  employeeManagement?: Resolver<ResolversTypes['EmployeePage'], ParentType, ContextType, RequireFields<QueryEmployeeManagementArgs, 'limit' | 'offset'>>;
   employees?: Resolver<Array<ResolversTypes['Employee']>, ParentType, ContextType, Partial<QueryEmployeesArgs>>;
   equipmentHistory?: Resolver<ResolversTypes['AssignmentHistoryPage'], ParentType, ContextType, RequireFields<QueryEquipmentHistoryArgs, 'limit' | 'offset'>>;
   equipmentInventory?: Resolver<ResolversTypes['EquipmentPage'], ParentType, ContextType, RequireFields<QueryEquipmentInventoryArgs, 'limit' | 'offset'>>;
@@ -538,6 +585,7 @@ export type Resolvers<ContextType = Context> = {
   AssignmentHistoryPage?: AssignmentHistoryPageResolvers<ContextType>;
   AuthPayload?: AuthPayloadResolvers<ContextType>;
   Employee?: EmployeeResolvers<ContextType>;
+  EmployeePage?: EmployeePageResolvers<ContextType>;
   Equipment?: EquipmentResolvers<ContextType>;
   EquipmentPage?: EquipmentPageResolvers<ContextType>;
   Invitation?: InvitationResolvers<ContextType>;

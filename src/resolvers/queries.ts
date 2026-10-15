@@ -4,6 +4,17 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { requireUser, requireAdmin } from '../auth.js';
 import { sessionUser } from '../accounts.js';
 export const queries: QueryResolvers = {
+  employeeManagement: async (_, { search, teamId, offset, limit }, { db, user }) => {
+    requireAdmin(user);
+    const start = offset ?? 0; const size = limit ?? 20; const term = search?.trim() ?? '';
+    if (start < 0 || size < 1 || size > 100 || term.length > 100) throw badInput('Use a nonnegative offset, a limit of 1–100, and a search of at most 100 characters.');
+    const where: Prisma.EmployeeWhereInput = {
+      ...(teamId ? { teamId } : {}),
+      ...(term ? { OR: [{ name: { contains: term } }, { email: { contains: term } }, { role: { contains: term } }] } : {}),
+    };
+    const [total, items] = await db.$transaction([db.employee.count({ where }), db.employee.findMany({ where, skip: start, take: size, orderBy: [{ name: 'asc' }, { id: 'asc' }] })]);
+    return { total, items };
+  },
   registrationOpen: async (_, __, { db }) => await db.user.count() === 0,
   invitations: async (_, { offset, limit }, { db, user }) => {
     requireAdmin(user);

@@ -5,7 +5,32 @@ import { register, signIn, signOut, changePassword, sessionUser, validateName, t
 import { equipmentInput } from '../inventory.js';
 import { changeAssignment } from '../equipment-lifecycle.js';
 import { createInvitation, setAccountActive } from '../invitations.js';
+import { saveEmployee } from '../employees.js';
 export const mutations: MutationResolvers = {
+  createTeam: async (_, { name, department }, { db, user }) => {
+    requireAdmin(user);
+    return db.team.create({ data: { name: validateName(name), department: validateName(department) } });
+  },
+  updateEmployee: async (_, { id, input }, { db, user, loaders }) => {
+    requireAdmin(user);
+    try {
+      const { employee, previous } = await saveEmployee(db, input, id);
+      if (previous) loaders.members.clear(previous.teamId);
+      loaders.members.clear(employee.teamId);
+      loaders.employee.clear(employee.id).prime(employee.id, employee);
+      return employee;
+    } catch (error) { databaseError(error); }
+  },
+  createEmployeeForAccount: async (_, { userId, input }, { db, user, loaders }) => {
+    requireAdmin(user);
+    try {
+      const { employee, sessions } = await saveEmployee(db, input, undefined, userId);
+      loaders.members.clear(employee.teamId);
+      loaders.employee.clear(employee.id).prime(employee.id, employee);
+      sessionEvents.emit('revoked', sessions.map(session => session.id));
+      return employee;
+    } catch (error) { databaseError(error); }
+  },
   createInvitation: (_, { email }, { db, user }) => createInvitation(db, user, email),
   setAccountActive: (_, { userId, active }, { db, user }) => setAccountActive(db, user, userId, active),
   revokeInvitation: async (_, { id }, { db, user }) => {
@@ -67,16 +92,8 @@ export const mutations: MutationResolvers = {
   changePassword: (_, { currentPassword, newPassword }, { db, user }) => changePassword(db, user, currentPassword, newPassword),
   createEmployee: async (_, { input }, { db, loaders, user }) => {
     requireAdmin(user);
-    const name = input.name.trim();
-    const role = input.role.trim();
-    const email = input.email.trim().toLowerCase();
-    if (!name || !role) throw badInput('Name and role must not be blank.');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badInput('A valid email address is required.');
     try {
-      const employee = await db.$transaction(async tx => {
-        if (!await tx.team.findUnique({ where: { id: input.teamId } })) throw notFound('Team', input.teamId);
-        return tx.employee.create({ data: { name, role, email, teamId: input.teamId } });
-      });
+      const { employee } = await saveEmployee(db, input);
       loaders.members.clear(employee.teamId);
       loaders.employee.clear(employee.id).prime(employee.id, employee);
       return employee;

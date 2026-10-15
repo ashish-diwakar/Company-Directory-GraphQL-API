@@ -23,6 +23,7 @@ type Equipment {
 }
 
 type Query {
+  employeeManagement(search: String, teamId: ID, offset: Int = 0, limit: Int = 20): EmployeePage!
   registrationOpen: Boolean!
   invitations(offset: Int = 0, limit: Int = 20): InvitationPage!
   equipmentHistory(equipmentId: ID, offset: Int = 0, limit: Int = 20): AssignmentHistoryPage!
@@ -43,6 +44,9 @@ input PublicEmployeeInput {
 }
 
 type Mutation {
+  updateEmployee(id: ID!, input: PublicEmployeeInput!): Employee!
+  createEmployeeForAccount(userId: ID!, input: PublicEmployeeInput!): Employee!
+  createTeam(name: String!, department: String!): Team!
   createInvitation(email: String!): InvitationPayload!
   revokeInvitation(id: ID!): Boolean!
   setAccountActive(userId: ID!, active: Boolean!): User!
@@ -58,6 +62,8 @@ type Mutation {
   createEmployee(input: PublicEmployeeInput!): Employee!
   assignEquipment(employeeId: ID!, equipmentId: ID!): Equipment!
 }
+
+type EmployeePage { items: [Employee!]! total: Int! }
 
 input EquipmentInput { type: String! model: String! serialNumber: String! }
 type EquipmentPage { items: [Equipment!]! total: Int! }
