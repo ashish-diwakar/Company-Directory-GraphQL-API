@@ -8,6 +8,7 @@ import { pubsub } from './pubsub.js';
 export interface GraphQLContext {
   db: PrismaClient;
   user?: AuthUser | null;
+  clientAddress?: string;
   pubsub: typeof pubsub;
   loaders: {
     team: DataLoader<string, Team>;

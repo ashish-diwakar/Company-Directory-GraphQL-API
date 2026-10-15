@@ -4,3 +4,5 @@ dist/
 coverage/
 src/generated/
 prisma/*.db*
+frontend/.env*
+!frontend/.env.example

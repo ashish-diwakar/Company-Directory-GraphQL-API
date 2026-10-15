@@ -5,6 +5,35 @@ generator client {
 datasource db {
   provider = "sqlite"
 }
+
+enum AccountRole {
+  ADMIN
+  EMPLOYEE
+}
+
+model User {
+  id String @id @default(uuid())
+  name String
+  email String @unique
+  passwordHash String
+  role AccountRole @default(EMPLOYEE)
+  createdAt DateTime @default(now())
+  sessions Session[]
+}
+
+model Session {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([userId])
+}
+
+// Acquiring a write lock before counting accounts serializes first-admin registration.
+model RegistrationLock {
+  id Int @id
+  version Int @default(0)
+}
 model Team {
   id String @id @default(uuid())
   name String

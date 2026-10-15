@@ -102,6 +102,10 @@ test('Prisma GraphQL persistence, validation, batching, and cache invalidation',
     const previousDemo = process.env.AUTH_DEMO_MODE;
     process.env.JWT_SECRET = 'integration-test-secret';
     process.env.AUTH_DEMO_MODE = 'false';
+    for (const [id, role] of [[admin.id, 'ADMIN'], ['employee', 'EMPLOYEE']] as const) {
+      await db.user.create({ data: { id, name: id, email: `${id}@example.com`, passwordHash: 'unused-test-hash', role } });
+      await db.session.create({ data: { id: `session-${id}`, userId: id, expiresAt: new Date(Date.now() + 3600000) } });
+    }
     const application = await createApplication(db);
     let socket: WebSocket | undefined;
     try {
@@ -109,8 +113,8 @@ test('Prisma GraphQL persistence, validation, batching, and cache invalidation',
       const address = application.httpServer.address();
       assert.ok(address && typeof address !== 'string');
       const endpoint = 'http://127.0.0.1:' + address.port + '/graphql';
-      const token = jwt.sign({ sub: admin.id, email: admin.email, role: 'ADMIN' }, process.env.JWT_SECRET, { expiresIn: '1h' });
-      const employeeToken = jwt.sign({ sub: 'employee', email: 'e@example.com', role: 'EMPLOYEE' }, process.env.JWT_SECRET);
+      const token = jwt.sign({ sub: admin.id, email: admin.email, role: 'ADMIN' }, process.env.JWT_SECRET, { jwtid: `session-${admin.id}`, expiresIn: '1h' });
+      const employeeToken = jwt.sign({ sub: 'employee', email: 'e@example.com', role: 'EMPLOYEE' }, process.env.JWT_SECRET, { jwtid: 'session-employee' });
       async function post(authorization?: string) {
         const response = await fetch(endpoint, {
           method: 'POST', headers: { 'Content-Type': 'application/json', ...(authorization ? { Authorization: authorization } : {}) },

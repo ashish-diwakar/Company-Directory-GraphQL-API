@@ -1,8 +1,18 @@
 import type { MutationResolvers } from '../__generated__/resolvers-types.js';
 import { badInput, databaseError, notFound } from '../errors.js';
 import { requireAdmin } from '../auth.js';
+import { register, signIn, signOut, changePassword, sessionUser, validateName, throttleAuthentication } from '../accounts.js';
 export const mutations: MutationResolvers = {
-  createEmployee: async (_, { input }, { db, loaders }) => {
+  register: (_, { input }, { db, clientAddress }) => { throttleAuthentication(clientAddress); return register(db, input); },
+  signIn: (_, { email, password }, { db, clientAddress }) => { throttleAuthentication(clientAddress); return signIn(db, email, password); },
+  signOut: (_, __, { db, user }) => signOut(db, user),
+  updateProfile: async (_, { name }, { db, user }) => {
+    const account = await sessionUser(db, user);
+    return db.user.update({ where: { id: account.id }, data: { name: validateName(name) } });
+  },
+  changePassword: (_, { currentPassword, newPassword }, { db, user }) => changePassword(db, user, currentPassword, newPassword),
+  createEmployee: async (_, { input }, { db, loaders, user }) => {
+    requireAdmin(user);
     const name = input.name.trim();
     const role = input.role.trim();
     const email = input.email.trim().toLowerCase();

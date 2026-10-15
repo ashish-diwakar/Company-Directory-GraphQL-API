@@ -1,5 +1,5 @@
 import type { GraphQLResolveInfo } from 'graphql';
-import type { EmployeeRecord, TeamRecord, EquipmentRecord } from '../data/models.js';
+import type { UserRecord, EmployeeRecord, TeamRecord, EquipmentRecord } from '../data/models.js';
 import type { Context } from '../context.js';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
@@ -8,6 +8,7 @@ export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: 
 export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
 export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> = { [_ in K]?: never };
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
+export type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 export type RequireFields<T, K extends keyof T> = Omit<T, K> & { [P in K]-?: NonNullable<T[P]> };
 /** All built-in and custom scalars, mapped to their actual values */
 export type Scalars = {
@@ -16,6 +17,18 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean; }
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
+};
+
+export enum AccountRole {
+  Admin = 'ADMIN',
+  Employee = 'EMPLOYEE'
+}
+
+export type AuthPayload = {
+  __typename?: 'AuthPayload';
+  expiresAt: Scalars['String']['output'];
+  token: Scalars['String']['output'];
+  user: User;
 };
 
 export type Employee = {
@@ -40,7 +53,12 @@ export type Equipment = {
 export type Mutation = {
   __typename?: 'Mutation';
   assignEquipment: Equipment;
+  changePassword: Scalars['Boolean']['output'];
   createEmployee: Employee;
+  register: AuthPayload;
+  signIn: AuthPayload;
+  signOut: Scalars['Boolean']['output'];
+  updateProfile: User;
 };
 
 
@@ -50,8 +68,30 @@ export type MutationAssignEquipmentArgs = {
 };
 
 
+export type MutationChangePasswordArgs = {
+  currentPassword: Scalars['String']['input'];
+  newPassword: Scalars['String']['input'];
+};
+
+
 export type MutationCreateEmployeeArgs = {
   input: PublicEmployeeInput;
+};
+
+
+export type MutationRegisterArgs = {
+  input: RegisterInput;
+};
+
+
+export type MutationSignInArgs = {
+  email: Scalars['String']['input'];
+  password: Scalars['String']['input'];
+};
+
+
+export type MutationUpdateProfileArgs = {
+  name: Scalars['String']['input'];
 };
 
 export type PublicEmployeeInput = {
@@ -65,7 +105,9 @@ export type Query = {
   __typename?: 'Query';
   employee?: Maybe<Employee>;
   employees: Array<Employee>;
+  me?: Maybe<User>;
   teams: Array<Team>;
+  users: Array<User>;
 };
 
 
@@ -76,6 +118,12 @@ export type QueryEmployeeArgs = {
 
 export type QueryEmployeesArgs = {
   role?: InputMaybe<Scalars['String']['input']>;
+};
+
+export type RegisterInput = {
+  email: Scalars['String']['input'];
+  name: Scalars['String']['input'];
+  password: Scalars['String']['input'];
 };
 
 export type Subscription = {
@@ -89,6 +137,14 @@ export type Team = {
   id: Scalars['ID']['output'];
   members: Array<Employee>;
   name: Scalars['String']['output'];
+};
+
+export type User = {
+  __typename?: 'User';
+  email: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  role: AccountRole;
 };
 
 
@@ -164,6 +220,8 @@ export type DirectiveResolverFn<TResult = Record<PropertyKey, never>, TParent = 
 
 /** Mapping between all available schema types and the resolvers types */
 export type ResolversTypes = {
+  AccountRole: AccountRole;
+  AuthPayload: ResolverTypeWrapper<Omit<AuthPayload, 'user'> & { user: ResolversTypes['User'] }>;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   Employee: ResolverTypeWrapper<EmployeeRecord>;
   Equipment: ResolverTypeWrapper<EquipmentRecord>;
@@ -171,13 +229,16 @@ export type ResolversTypes = {
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
   PublicEmployeeInput: PublicEmployeeInput;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  RegisterInput: RegisterInput;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   Subscription: ResolverTypeWrapper<Record<PropertyKey, never>>;
   Team: ResolverTypeWrapper<TeamRecord>;
+  User: ResolverTypeWrapper<UserRecord>;
 };
 
 /** Mapping between all available schema types and the resolvers parents */
 export type ResolversParentTypes = {
+  AuthPayload: Omit<AuthPayload, 'user'> & { user: ResolversParentTypes['User'] };
   Boolean: Scalars['Boolean']['output'];
   Employee: EmployeeRecord;
   Equipment: EquipmentRecord;
@@ -185,9 +246,17 @@ export type ResolversParentTypes = {
   Mutation: Record<PropertyKey, never>;
   PublicEmployeeInput: PublicEmployeeInput;
   Query: Record<PropertyKey, never>;
+  RegisterInput: RegisterInput;
   String: Scalars['String']['output'];
   Subscription: Record<PropertyKey, never>;
   Team: TeamRecord;
+  User: UserRecord;
+};
+
+export type AuthPayloadResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AuthPayload'] = ResolversParentTypes['AuthPayload']> = {
+  expiresAt?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  token?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  user?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
 };
 
 export type EmployeeResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Employee'] = ResolversParentTypes['Employee']> = {
@@ -209,13 +278,20 @@ export type EquipmentResolvers<ContextType = Context, ParentType extends Resolve
 
 export type MutationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = {
   assignEquipment?: Resolver<ResolversTypes['Equipment'], ParentType, ContextType, RequireFields<MutationAssignEquipmentArgs, 'employeeId' | 'equipmentId'>>;
+  changePassword?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationChangePasswordArgs, 'currentPassword' | 'newPassword'>>;
   createEmployee?: Resolver<ResolversTypes['Employee'], ParentType, ContextType, RequireFields<MutationCreateEmployeeArgs, 'input'>>;
+  register?: Resolver<ResolversTypes['AuthPayload'], ParentType, ContextType, RequireFields<MutationRegisterArgs, 'input'>>;
+  signIn?: Resolver<ResolversTypes['AuthPayload'], ParentType, ContextType, RequireFields<MutationSignInArgs, 'email' | 'password'>>;
+  signOut?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  updateProfile?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationUpdateProfileArgs, 'name'>>;
 };
 
 export type QueryResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = {
   employee?: Resolver<Maybe<ResolversTypes['Employee']>, ParentType, ContextType, RequireFields<QueryEmployeeArgs, 'id'>>;
   employees?: Resolver<Array<ResolversTypes['Employee']>, ParentType, ContextType, Partial<QueryEmployeesArgs>>;
+  me?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType>;
   teams?: Resolver<Array<ResolversTypes['Team']>, ParentType, ContextType>;
+  users?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
 };
 
 export type SubscriptionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = {
@@ -229,12 +305,21 @@ export type TeamResolvers<ContextType = Context, ParentType extends ResolversPar
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
+export type UserResolvers<ContextType = Context, ParentType extends ResolversParentTypes['User'] = ResolversParentTypes['User']> = {
+  email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  role?: Resolver<ResolversTypes['AccountRole'], ParentType, ContextType>;
+};
+
 export type Resolvers<ContextType = Context> = {
+  AuthPayload?: AuthPayloadResolvers<ContextType>;
   Employee?: EmployeeResolvers<ContextType>;
   Equipment?: EquipmentResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
   Team?: TeamResolvers<ContextType>;
+  User?: UserResolvers<ContextType>;
 };
 

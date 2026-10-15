@@ -1,165 +1,122 @@
-# Company Directory GraphQL API
+# Company Directory
 
-A TypeScript API using Apollo Server 4, Express 4, Prisma 7, SQLite, JWT authentication, and WebSocket subscriptions. Records persist across restarts.
+A React workspace for people, teams, and equipment, backed by Apollo Server 4, Prisma 7, SQLite, and live GraphQL subscriptions. The frontend uses Vite, TypeScript, and Apollo Client.
 
-## Setup
+## Start locally
 
-Use Node.js 22.12+ (or 24+) and npm. Run commands from the project root.
+Use Node.js 22.12+ or 24+ and run commands from the project root:
 
 ```sh
 npm install
 npm run db:generate
 npm run db:deploy
 npm run db:seed
-npm run codegen
-npm run dev
 ```
 
-Open [Apollo Sandbox](http://localhost:4000). The default database is `prisma/dev.db`; no environment file is required. Copy `.env.example` to `.env` to override `DATABASE_URL` or `PORT`. Relative SQLite URLs resolve from the working directory; use an absolute file URL for deployments.
+Copy `.env.example` to `.env`. Set `JWT_SECRET` to a long, random secret; keep this server-side. The default SQLite database is `prisma/dev.db`. Relative database paths resolve from the working directory. The seed **replaces directory data** with 2 teams, 4 employees, and 4 hardware items, in one transaction. It does not create or delete login accounts, sessions, or the registration lock. Do not seed live directory data.
 
-The canonical HTTP endpoint is `http://localhost:4000/graphql`; `/` remains available for existing clients. Subscriptions use `ws://localhost:4000/graphql` and the `graphql-transport-ws` subprotocol provided by `graphql-ws`.
+Run the servers in separate terminals:
 
-The seed **deletes all equipment, employees, and teams** before creating 2 teams, 4 employees, and 4 hardware items. It runs in one transaction, in foreign-key-safe order. IDs are generated UUIDs and change on reseeding. Seeding is explicit and never runs at server startup or during deployment.
+```sh
+npm run dev
+npm run dev:frontend
+```
 
-## Commands
+- Website: [http://127.0.0.1:5173](http://127.0.0.1:5173)
+- GraphQL / Apollo Sandbox: [http://localhost:4000/graphql](http://localhost:4000/graphql)
+- WebSocket: `ws://localhost:4000/graphql`, protocol `graphql-transport-ws`
+
+`PORT` controls the backend port. Copy `frontend/.env.example` to `frontend/.env.local` to override `VITE_GRAPHQL_HTTP_URL` and `VITE_GRAPHQL_WS_URL`; restart Vite after changes. Vite environment values are public. Never put a signing secret in them.
+
+## Accounts and access
+
+Choose **Create an account** on the website. The first successfully registered account becomes `ADMIN`; every later account becomes `EMPLOYEE`. This decision is made inside a database transaction after acquiring SQLite's writer lock using a singleton registration row. Clients cannot request roles. Directory seed records are not login accounts and do not affect the first-user decision.
+
+Passwords must contain 12–128 characters and are stored as asynchronously derived scrypt hashes with individual cryptographically random salts. Email addresses are trimmed, lowercased, and unique. Sign-in uses one generic failure message for incorrect passwords and unknown emails. Registration and sign-in share an in-process limit of 30 attempts per client IP per 15 minutes. Deploy a shared limiter if running multiple API processes. The app does not trust forwarded client IP headers by default.
+
+Signing in or registering creates an eight-hour database session and a signed HS256 JWT containing its identifier. Each HTTP request and WebSocket operation validates the signature, expiry, live session, and current account role in SQLite. Old manually generated demo tokens and bypass flags are no longer accepted by the network API.
+
+- **Directory:** authenticated accounts can browse people and teams and receive live assignment updates.
+- **Assignment / employee creation:** admin-only mutations enforced by the server.
+- **Accounts:** administrators can view registered users and their roles; the UI does not expose role escalation or account deletion.
+- **My account:** edit your name or change your password. Email is a read-only sign-in identifier.
+- **Sign out:** revokes the current server session and closes its active WebSockets; the frontend clears the token and Apollo cache.
+- **Change password:** verifies the current password and revokes every session for that account, requiring a new sign-in on every device.
+- **Session expiry:** the frontend returns to sign-in; the backend rejects expired requests and closes expired WebSockets.
+
+Passwords, tokens, and session identifiers are never exposed in the public user type. Login accounts remain separate from employee directory entries. Email verification and email-based password recovery are not configured; the account-help screen explains this instead of simulating an email workflow. Keep the first administrator's credentials safe.
+
+The frontend stores its JWT under `localStorage.token` and restores the session using `me`. Sign-in/out recreates the WebSocket transport and Apollo client so cached data and subscription identities cannot cross sessions. Tabs synchronize local token changes. Use HTTPS/WSS when deployed and review the localStorage/XSS tradeoff for your environment; this project does not implement an HttpOnly cookie session flow.
+
+## API examples
+
+```graphql
+mutation Register($input: RegisterInput!) {
+  register(input: $input) {
+    token
+    expiresAt
+    user { id name email role }
+  }
+}
+
+mutation SignIn($email: String!, $password: String!) {
+  signIn(email: $email, password: $password) {
+    token
+    user { id name email role }
+  }
+}
+
+query CurrentAccount { me { id name email role } }
+
+query Directory {
+  employees {
+    id name email role
+    team { id name department }
+    assignedEquipment { id model serialNumber }
+  }
+}
+
+mutation Assign($employeeId: ID!, $equipmentId: ID!) {
+  assignEquipment(employeeId: $employeeId, equipmentId: $equipmentId) {
+    id model assignedTo { id name }
+  }
+}
+
+subscription AssignmentAlerts {
+  equipmentAssigned { id model assignedTo { id name } }
+}
+
+mutation SignOut { signOut }
+```
+
+HTTP requests use `Authorization: Bearer <session token>`. WebSocket clients pass `{ "authToken": "<session token>" }` in connection parameters. The website manages this automatically. Sandbox introspection is public in development, but directory data requires a session. Invalid supplied tokens fail context creation with HTTP 401 and `UNAUTHENTICATED`. Resolver access failures return GraphQL `UNAUTHENTICATED` or `FORBIDDEN`; missing records use `NOT_FOUND`; invalid input uses `BAD_USER_INPUT`.
+
+Equipment choices come from assigned equipment returned by the directory. The admin form also accepts an equipment UUID because the API has no all-equipment query. Reassignment publishes after its transaction commits, refreshes the frontend directory, and invalidates affected loader caches. Every relationship batches through a request/operation-scoped DataLoader; subscription caches clear for each event.
+
+PubSub and session-close notifications are process-local, without replay or guaranteed delivery across process crashes. Use a shared broker/session-revocation channel for multiple replicas, and an outbox if guaranteed assignment-event delivery is required.
+
+## Commands and verification
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Development server with reload |
-| `npm run db:generate` | Generate Prisma client after schema changes |
-| `npm run db:migrate -- --name change_name` | Create and apply a development migration |
-| `npm run db:deploy` | Apply committed migrations without creating new ones |
-| `npm run db:seed` | Destructively replace data with sample records |
-| `npm run auth:token -- ADMIN` | Generate a one-hour demo JWT using your configured secret |
-| `npm run codegen` | Regenerate GraphQL resolver types |
-| `npm run typecheck` | Check application TypeScript |
-| `npm test` | Run all Jest suites sequentially against temporary SQLite databases |
-| `npm run test:types` | Typecheck application, seed, and test code |
-| `npm run build` | Generate clients/types, compile, and copy GraphQL schema |
-| `npm start` | Run the compiled server |
+| `npm run dev` | Backend with reload |
+| `npm run dev:frontend` | Vite website |
+| `npm run db:generate` | Generate Prisma client |
+| `npm run db:migrate -- --name change_name` | Create/apply a development migration |
+| `npm run db:deploy` | Apply committed migrations |
+| `npm run db:seed` | Destructively reset directory sample data |
+| `npm run codegen` | Generate GraphQL resolver types |
+| `npm run typecheck` | Check backend TypeScript |
+| `npm run test:types` | Check backend, seed, and test types |
+| `npm test` | Run Jest suites sequentially |
+| `npm run build` | Generate clients/types and compile backend |
+| `npm run build:frontend` | Typecheck and build frontend into `frontend/dist` |
+| `npm start` | Run compiled backend |
 
-Before starting a deployed build, apply migrations with `npm run db:deploy`. Keep the SQLite file on persistent writable storage and back it up. Do not run the development seed against live data.
+Tests use temporary SQLite databases, apply committed migrations, and clean up their servers/sessions/files. They do not register accounts in the developer database. Coverage includes simultaneous first-admin registration, invalid credentials, duplicate emails, role escalation attempts, profile updates, password changes, session revocation, WebSocket closure, RBAC, persistence, batching, browser GET handling, and live assignment delivery. Jest's ESM runtime prints Node's experimental VM-modules warning.
 
-## Example operations
+The root npm package owns the API and `frontend/` is an npm workspace. `src/accounts.ts` owns credentials/sessions; `src/auth.ts` validates JWTs and resolves database identities; `src/app.ts` wires HTTP/WebSockets; `src/index.ts` manages startup and shutdown. `frontend/src/components/` contains the themed screens. Migrations are additive; generated Prisma code, local database files, `.env` secrets, and build output are ignored.
 
-```graphql
-query Directory {
-  employees(role: "Engineer") {
-    id
-    name
-    email
-    team { id name members { id name } }
-    assignedEquipment { id model assignedTo { id name } }
-  }
-  teams { id name department members { id name } }
-}
+Before a deployed start, apply migrations and configure persistent writable SQLite storage. Shutdown drains HTTP/WebSockets and disconnects Prisma. `NODE_ENV=production` requires `JWT_SECRET`, disables Sandbox/introspection, and omits error stack traces. Express currently uses permissive CORS; configure deployment-specific origins. Apollo Server 4 is retained from the original project; review support status and dependency audit before deployment.
 
-mutation CreateEmployee($input: PublicEmployeeInput!) {
-  createEmployee(input: $input) {
-    id
-    name
-    team { name }
-  }
-}
-
-mutation AssignEquipment($employeeId: ID!, $equipmentId: ID!) {
-  assignEquipment(employeeId: $employeeId, equipmentId: $equipmentId) {
-    id
-    assignedTo { id name }
-  }
-}
-```
-
-Example creation variables; replace the team ID with a UUID returned by `teams`:
-
-```json
-{
-  "input": {
-    "name": "Alex Morgan",
-    "email": "alex@example.com",
-    "role": "Engineer",
-    "teamId": "REPLACE_WITH_TEAM_UUID"
-  }
-}
-```
-
-For assignment, use employee and equipment UUIDs returned by the directory query.
-
-## Authentication and roles
-
-Copy `.env.example` to `.env` and set `JWT_SECRET` to a long random secret. Generate a local demonstration token:
-
-```sh
-npm run auth:token -- ADMIN
-npm run auth:token -- EMPLOYEE
-```
-
-HTTP clients send `Authorization: Bearer <token>`. Tokens must use HS256 and contain a nonempty `sub` (or `id`), `email`, and `role` (`ADMIN` or `EMPLOYEE`). Invalid signatures, expired tokens, unsupported algorithms, and malformed claims return `UNAUTHENTICATED`; supplied invalid tokens never fall back to demo access.
-
-Invalid supplied tokens fail HTTP context creation with status 401. Anonymous or employee requests that reach the assignment resolver return GraphQL errors in an HTTP 200 response, with `UNAUTHENTICATED` or `FORBIDDEN` respectively.
-
-`assignEquipment` requires an authenticated `ADMIN`: anonymous callers receive `UNAUTHENTICATED`, and employees receive `FORBIDDEN`. Queries and `createEmployee` retain their existing public access. Subscription access requires either authenticated role. These JWT identities do not require matching employee database records. Token issuance and user login are external to this API; the token command is a local development aid.
-
-For a no-token local demo, explicitly set `AUTH_DEMO_MODE=true`. This supplies a demo administrator for missing tokens and accepts the literal `demo-admin` token. It is disabled by default and ignored in production. Production startup requires `JWT_SECRET`.
-
-## Real-time equipment assignments
-
-Start a subscription in a WebSocket-capable GraphQL client, using `graphql-ws` and connection parameters `{ "authToken": "<token>" }` (a `Bearer ` prefix is also accepted):
-
-```graphql
-subscription AssignmentUpdates {
-  equipmentAssigned {
-    id
-    model
-    assignedTo { id name assignedEquipment { id model } }
-  }
-}
-```
-
-Run `assignEquipment` with an admin HTTP token in another client. Every successful assignment publishes the committed equipment record to connected subscribers, including repeated assignments. Rejected mutations publish nothing. Invalid or anonymous WebSocket handshakes close with code `4403`. Tokens are verified at connection and again for each new operation; reconnect with a refreshed token after expiry. An already-running subscription is not automatically terminated when its token expires.
-
-PubSub is shared within one process and delivers live events only: it has no replay, durable queue, or cross-process delivery. Use a shared broker for multiple replicas. The current publish happens after the transaction commits; guaranteed delivery across process failures would require an outbox. Subscription loaders are scoped to each operation and cleared for each event so relationship data stays fresh.
-
-## Data and behavior
-
-- Teams have employees; every employee requires a valid team. Team deletion is restricted while members exist.
-- Equipment optionally belongs to one employee. Deleting that employee sets the assignment to null. Email and serial number have unique constraints; relation keys and employee role are indexed.
-- Role filtering is exact and case-sensitive. Names and roles are trimmed; emails are trimmed and lowercased before creation.
-- Missing records return GraphQL `NOT_FOUND`. Blank names/roles, malformed or duplicate emails, and foreign-key violations return `BAD_USER_INPUT`.
-- Equipment reassignment is transactional and idempotent. Mutations invalidate affected request caches so later mutation fields see updated relations.
-- All relationship fields batch through DataLoader. `Employee.team` batches team IDs; `Employee.assignedEquipment` groups equipment by employee ID, returning an empty list when needed. Reverse fields use batched employee/member loaders.
-- Each network request receives new loaders, sharing one global Prisma client. Loader results preserve input key order, and caches never cross requests.
-
-## Testing
-
-```sh
-npm test
-npm run test:types
-```
-
-Jest runs sequentially with ts-jest in ESM mode. Supertest targets the application returned by `createApplication(db)` and starts temporary HTTP listeners; no server on port 4000 is needed. Each integration suite creates its own temporary SQLite database, applies committed migrations, seeds real UUID records, and disposes its servers, subscriptions, and database afterward. The developer database is untouched.
-
-- `tests/auth.test.ts`: HTTP anonymous/employee rejection, invalid and expired JWTs, successful admin assignment, missing records, and event/write assertions.
-- `tests/auth-unit.test.ts`: JWT claims, algorithms, role guards, and local-only demo fallback.
-- `tests/api.test.ts`: persistence, seeding, batching, cache invalidation, and real WebSocket delivery.
-
-The admin success test requires an error-free response, a persisted assignment, and exactly one matching event. Missing data is a test failure for that case. Jest uses Node's `--experimental-vm-modules` flag as described in its [ESM documentation](https://jestjs.io/docs/ecmascript-modules); Node may print an experimental-feature warning.
-
-## Structure
-
-- `prisma/schema.prisma`, `prisma/migrations/`: relational schema and baseline migration.
-- `prisma/seed.ts`: transactional sample-data reset.
-- `prisma.config.ts`: migration URL and seed command.
-- `src/db.ts`: SQLite adapter and shared Prisma client.
-- `src/context.ts`: request factory, database access, and loaders.
-- `src/auth.ts`, `src/pubsub.ts`: JWT verification, role guards, and shared assignment events.
-- `src/app.ts`, `src/index.ts`: Express/HTTP/WebSocket wiring and shutdown.
-- `src/resolvers/`, `src/errors.ts`: Prisma operations, relational fields, and classified errors.
-- `src/schema.graphql`, `codegen.ts`: API contract and resolver type generation, mapped to Prisma record types.
-
-Shutdown drains HTTP requests, disposes WebSocket subscriptions, and disconnects Prisma. `NODE_ENV=production` disables Sandbox and introspection; GraphQL errors omit stack traces. Express currently uses permissive CORS; configure allowed origins for your deployment. Apollo Server 4 remains from the existing app; review its support status and dependency audit before public deployment.
-
-The transport follows [Apollo's subscription integration](https://www.apollographql.com/docs/apollo-server/data/subscriptions) and the [graphql-ws recipes](https://the-guild.dev/graphql/ws/guides/recipes). The installed `graphql-subscriptions` version calls its iterator method `asyncIterableIterator` (the current equivalent of `asyncIterator`).
-
-Prisma 7 SQLite setup follows the [official Prisma guide](https://www.prisma.io/docs/v7/prisma-orm/add-to-existing-project/sqlite).
-
+References: [Prisma SQLite](https://www.prisma.io/docs/v7/prisma-orm/add-to-existing-project/sqlite), [Apollo subscriptions](https://www.apollographql.com/docs/apollo-server/data/subscriptions), [Node crypto](https://nodejs.org/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback).

@@ -23,6 +23,8 @@ type Equipment {
 }
 
 type Query {
+  me: User
+  users: [User!]!
   employees(role: String): [Employee!]!
   employee(id: ID!): Employee
   teams: [Team!]!
@@ -36,9 +38,19 @@ input PublicEmployeeInput {
 }
 
 type Mutation {
+  register(input: RegisterInput!): AuthPayload!
+  signIn(email: String!, password: String!): AuthPayload!
+  signOut: Boolean!
+  updateProfile(name: String!): User!
+  changePassword(currentPassword: String!, newPassword: String!): Boolean!
   createEmployee(input: PublicEmployeeInput!): Employee!
   assignEquipment(employeeId: ID!, equipmentId: ID!): Equipment!
 }
+
+enum AccountRole { ADMIN EMPLOYEE }
+type User { id: ID! name: String! email: String! role: AccountRole! }
+type AuthPayload { token: String! user: User! expiresAt: String! }
+input RegisterInput { name: String! email: String! password: String! }
 
 type Subscription {
   equipmentAssigned: Equipment!

@@ -3,7 +3,7 @@ import { test } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import { authenticate, requireAdmin } from '../src/auth.js';
 
-test('JWT validation, RBAC, and explicit development bypass', () => {
+test('JWT validation and RBAC without demonstration bypasses', () => {
   const saved = { secret: process.env.JWT_SECRET, demo: process.env.AUTH_DEMO_MODE, env: process.env.NODE_ENV };
   const secret = 'test-secret-only';
   process.env.JWT_SECRET = secret;
@@ -27,8 +27,8 @@ test('JWT validation, RBAC, and explicit development bypass', () => {
     ]) assert.throws(() => authenticate(invalid), { extensions: { code: 'UNAUTHENTICATED' } });
     process.env.AUTH_DEMO_MODE = 'true';
     process.env.NODE_ENV = 'development';
-    assert.equal(authenticate()?.role, 'ADMIN');
-    assert.equal(authenticate('demo-admin')?.role, 'ADMIN');
+    assert.equal(authenticate(), null);
+    assert.throws(() => authenticate('demo-admin'));
     assert.throws(() => authenticate('bad-token'));
     process.env.NODE_ENV = 'production';
     assert.equal(authenticate(), null);

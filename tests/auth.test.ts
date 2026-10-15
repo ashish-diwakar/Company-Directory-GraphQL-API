@@ -28,8 +28,8 @@ describe('GraphQL HTTP authentication and equipment assignment RBAC', () => {
   const saved = { secret: process.env.JWT_SECRET, demo: process.env.AUTH_DEMO_MODE };
 
   function token(role: 'ADMIN' | 'EMPLOYEE', options: jwt.SignOptions = {}) {
-    return jwt.sign({ id: 'test-user', email: `${role.toLowerCase()}@example.com`, role }, secret, {
-      expiresIn: '1h', ...options,
+    return jwt.sign({ id: `test-${role}`, email: `${role.toLowerCase()}@example.com`, role }, secret, {
+      jwtid: `session-${role}`, expiresIn: '1h', ...options,
     });
   }
   function assign(authorization?: string, targetEmployeeId = employeeId, targetEquipmentId = equipmentId) {
@@ -55,6 +55,10 @@ describe('GraphQL HTTP authentication and equipment assignment RBAC', () => {
       for (const statement of sql.split(';').filter(part => part.trim())) await db.$executeRawUnsafe(statement);
     }
     const seeded = await seedDatabase(db);
+    for (const role of ['ADMIN', 'EMPLOYEE'] as const) {
+      await db.user.create({ data: { id: `test-${role}`, name: role, email: `${role.toLowerCase()}@example.com`, role, passwordHash: 'unused-test-hash' } });
+      await db.session.create({ data: { id: `session-${role}`, userId: `test-${role}`, expiresAt: new Date(Date.now() + 3600000) } });
+    }
     originalOwnerId = seeded.employees[0]!.id;
     employeeId = seeded.employees[1]!.id;
     equipmentId = (await db.equipment.findUniqueOrThrow({ where: { serialNumber: 'SN-001' } })).id;
