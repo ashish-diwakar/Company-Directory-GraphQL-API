@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
+}
+datasource db {
+  provider = "sqlite"
+}
+model Team {
+  id String @id @default(uuid())
+  name String
+  department String
+  members Employee[]
+}
+model Employee {
+  id String @id @default(uuid())
+  name String
+  email String @unique
+  role String
+  teamId String
+  team Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  assignedEquipment Equipment[]
+  @@index([teamId])
+  @@index([role])
+}
+model Equipment {
+  id String @id @default(uuid())
+  type String
+  model String
+  serialNumber String @unique
+  assignedToId String?
+  assignedTo Employee? @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  @@index([assignedToId])
+}
+

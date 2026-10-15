@@ -1,0 +1,41 @@
+type Employee {
+  id: ID!
+  name: String!
+  email: String!
+  role: String!
+  team: Team!
+  assignedEquipment: [Equipment!]!
+}
+
+type Team {
+  id: ID!
+  name: String!
+  department: String!
+  members: [Employee!]!
+}
+
+type Equipment {
+  id: ID!
+  type: String!
+  model: String!
+  serialNumber: String!
+  assignedTo: Employee
+}
+
+type Query {
+  employees(role: String): [Employee!]!
+  employee(id: ID!): Employee
+  teams: [Team!]!
+}
+
+input PublicEmployeeInput {
+  name: String!
+  email: String!
+  role: String!
+  teamId: ID!
+}
+
+type Mutation {
+  createEmployee(input: PublicEmployeeInput!): Employee!
+  assignEquipment(employeeId: ID!, equipmentId: ID!): Equipment!
+}
