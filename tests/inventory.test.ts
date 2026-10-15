@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createApplication } from '../src/app.js';
 import { createDatabase } from '../src/db.js';
-import { register } from '../src/accounts.js';
+import { registerTestUser as register } from './helpers/register.js';
 import { seedDatabase } from '../prisma/seed.js';
 
 describe('Admin equipment inventory', () => {

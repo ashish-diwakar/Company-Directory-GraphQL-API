@@ -1,4 +1,4 @@
-import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scrypt, timingSafeEqual, createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import jwt from 'jsonwebtoken';
 import { GraphQLError } from 'graphql';
@@ -41,7 +41,7 @@ export async function verifyPassword(password: string, stored: string) {
   const expected = Buffer.from(key, 'hex');
   return expected.length === hash.length && timingSafeEqual(expected, hash);
 }
-function normalizedEmail(email: string) {
+export function normalizedEmail(email: string) {
   const normalized = email.trim().toLowerCase();
   if (normalized.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) throw badInput('A valid email address is required.');
   return normalized;
@@ -59,7 +59,8 @@ async function issueSession(tx: Prisma.TransactionClient, user: User) {
   });
   return { token, user, expiresAt: expiresAt.toISOString() };
 }
-export async function register(db: PrismaClient, input: { name: string; email: string; password: string }) {
+export const invitationHash = (token: string) => createHash('sha256').update(token).digest('hex');
+export async function register(db: PrismaClient, input: { name: string; email: string; password: string; invitationToken?: string | null }) {
   secret();
   const name = validateName(input.name);
   const email = normalizedEmail(input.email);
@@ -69,6 +70,14 @@ export async function register(db: PrismaClient, input: { name: string; email: s
       // First write obtains SQLite's writer lock BEFORE the first-user decision.
       await tx.registrationLock.upsert({ where: { id: 1 }, create: { id: 1 }, update: { version: { increment: 1 } } });
       const first = await tx.user.count() === 0;
+      if (!first) {
+        const token = input.invitationToken?.trim();
+        const invitation = token && token.length <= 200 ? await tx.invitation.findUnique({ where: { tokenHash: invitationHash(token) } }) : null;
+        if (!invitation || invitation.email !== email || invitation.revokedAt || invitation.acceptedAt || invitation.expiresAt.getTime() <= Date.now()) {
+          throw badInput('A valid, unused invitation for this email address is required. Ask your administrator for a new invitation.');
+        }
+        await tx.invitation.update({ where: { id: invitation.id }, data: { acceptedAt: new Date() } });
+      }
       const user = await tx.user.create({ data: { name, email, passwordHash, role: first ? 'ADMIN' : 'EMPLOYEE' } });
       return issueSession(tx, user);
     }, { timeout: 10000 });
@@ -83,10 +92,10 @@ export async function signIn(db: PrismaClient, email: string, password: string) 
   secret();
   const user = await db.user.findUnique({ where: { email: email.trim().toLowerCase() } });
   const valid = await verifyPassword(password, user?.passwordHash ?? dummyHash);
-  if (!user || !valid) throw new GraphQLError('Email or password is incorrect.', { extensions: { code: 'UNAUTHENTICATED' } });
+  if (!user || !valid || !user.active) throw new GraphQLError('Email or password is incorrect.', { extensions: { code: 'UNAUTHENTICATED' } });
   return db.$transaction(async tx => {
     const current = await tx.user.findUnique({ where: { id: user.id } });
-    if (!current || current.passwordHash !== user.passwordHash) throw unauthenticated();
+    if (!current || !current.active || current.passwordHash !== user.passwordHash) throw unauthenticated();
     return issueSession(tx, current);
   });
 }
@@ -94,7 +103,7 @@ export async function sessionUser(db: PrismaClient, identity: AuthUser | null | 
   const user = requireUser(identity);
   if (!user.sessionId) throw unauthenticated();
   const session = await db.session.findUnique({ where: { id: user.sessionId }, include: { user: true } });
-  if (!session || session.userId !== user.id || session.expiresAt.getTime() <= Date.now()) throw unauthenticated();
+  if (!session || !session.user.active || session.userId !== user.id || session.expiresAt.getTime() <= Date.now()) throw unauthenticated();
   return session.user;
 }
 export async function signOut(db: PrismaClient, identity: AuthUser | null | undefined) {

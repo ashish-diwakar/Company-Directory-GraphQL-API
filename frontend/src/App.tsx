@@ -14,7 +14,7 @@ import { MyEquipment } from './components/MyEquipment';
 import { explainError } from './errors';
 
 export default function App() {
-  const [route, setRoute] = useState(() => location.hash.slice(1) || 'directory');
+  const [route, setRoute] = useState(() => location.hash.slice(1).split('?')[0] || 'directory');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(() => sessionStorage.getItem('auth-notice') ?? '');
   const token = readToken();
@@ -24,7 +24,7 @@ export default function App() {
   const [signOut] = useMutation(SIGN_OUT);
   const user = data?.me;
   useEffect(() => {
-    const navigate = () => setRoute(location.hash.slice(1) || 'directory');
+    const navigate = () => setRoute(location.hash.slice(1).split('?')[0] || 'directory');
     const synchronize = (event: StorageEvent) => {
       if (event.key === 'token' || event.key === null) void changeToken(readToken());
     };
@@ -67,6 +67,7 @@ export default function App() {
       <footer>Company Directory<span>People · Teams · Equipment</span></footer></main>}
   </>;
 }
+
 
 
 

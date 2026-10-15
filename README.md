@@ -4,7 +4,26 @@ A React workspace for people, teams, and equipment, backed by Apollo Server 4, P
 
 **POC scope:** one organization running one API instance with a persistent SQLite database. SQLite remains the supported database; the remaining improvements will be delivered one feature at a time for manual verification.
 
-## Latest feature: device returns and assignment history
+## Latest feature: invitations and account deactivation
+
+After the first administrator registers, public registration closes. Admins now create invitations in **Accounts → Invite a colleague**. Each invitation is bound to one normalized email address, expires after seven days, and can be used once. Only a SHA-256 hash of its random secret is stored. The administrator sees the link only when creating it; share it privately with the intended colleague. Email sending is not configured.
+
+The link opens the registration form with the invitation/email filled in. Invited users always become employees and still need an explicit employee-record link for personal equipment access. Expired, revoked, reused, missing, or wrong-email invitations are rejected. Losing a link requires revoking the pending invitation and creating a new one; existing links cannot be retrieved. Invitation status/history is admin-only and paginated.
+
+Admins can **Deactivate** or **Reactivate** employee accounts in Accounts. Deactivation ends every session, closes live sockets, and blocks sign-in; employee records, links, equipment assignments, and audit history are preserved. Return company devices separately if appropriate. Reactivation permits a fresh sign-in with the existing password but does not restore revoked sessions. Self-deactivation and removing the last active administrator are blocked. The UI keeps the bootstrap admin protected; no role-promotion workflow has been added.
+
+### Verify this milestone
+
+1. As admin, open **Accounts**, enter a new colleague email, and create an invitation. Copy the link while it is shown.
+2. Open the link in a separate browser profile/incognito window. Verify the email/code are filled, complete registration, and confirm the account has employee access.
+3. Reopen the same link, or try another email with its code. Registration should fail. Opening registration without an invitation should fail after setup, too.
+4. Create another invitation and revoke it. Its link must stop working. After revocation, you can create a replacement for that email. The list also shows Accepted/Expired states.
+5. Deactivate the invited employee account. Its live connections should close, its next API request should be rejected, and sign-in should fail. Directory/equipment/history records must remain unchanged.
+6. Reactivate it and sign in again. The old token must remain invalid. Link the account to an employee as usual if it needs personal equipment access.
+
+The SQLite migration has been applied here. Existing accounts remain active, and existing passwords/sessions are preserved until deactivated or otherwise revoked. Other checkouts should run `npm run db:deploy` and `npm run db:generate`. No seed reset is required. Initial administrator setup should still take place privately: the first account is trusted to initialize the workspace.
+
+## Verified feature: device returns and assignment history
 
 Administrators can now return a received device to unassigned stock from **Inventory → Return**. The confirmation shows the device/serial and current owner, accepts optional notes (up to 500 characters), and checks that the owner has not changed since the screen was opened. If another admin has reassigned the device, the API returns `CONFLICT` instead of clearing the newer assignment. Returning an already-unassigned device is a harmless no-op.
 
@@ -64,7 +83,7 @@ The Directory's assignment form now searches the full inventory and offers unass
 6. Return to **Inventory** and filter **Assigned**. Edit the device's model, save, and verify its owner is unchanged. Reload to confirm persistence.
 7. Sign in with an employee account. The Inventory navigation should be absent; opening `#inventory` directly should show an access-denied message. Backend inventory requests must return `FORBIDDEN` too.
 
-The inventory milestone has been verified. Returns and assignment history are now available in the current milestone; retirement, invitations, and session-cookie changes remain future work.
+The inventory, personal-equipment, and return/history milestones have been verified. Invitations and deactivation are the current milestone; retirement and session-cookie changes remain future work.
 
 ## Start locally
 
@@ -94,7 +113,7 @@ npm run dev:frontend
 
 ## Accounts and access
 
-Choose **Create an account** on the website. The first successfully registered account becomes `ADMIN`; every later account becomes `EMPLOYEE`. This decision is made inside a database transaction after acquiring SQLite's writer lock using a singleton registration row. Clients cannot request roles. Directory seed records are not login accounts and do not affect the first-user decision.
+Choose **Create an account** for initial setup. The first successfully registered account becomes `ADMIN`; registration then requires a valid invitation for that email and creates `EMPLOYEE` accounts. The first-user decision and invitation consumption happen inside a transaction after acquiring SQLite's writer lock. Clients cannot request roles. Directory seed records are not login accounts and do not affect setup. `registrationOpen` reports only whether initial setup is still available.
 
 Passwords must contain 12–128 characters and are stored as asynchronously derived scrypt hashes with individual cryptographically random salts. Email addresses are trimmed, lowercased, and unique. Sign-in uses one generic failure message for incorrect passwords and unknown emails. Registration and sign-in share an in-process limit of 30 attempts per client IP per 15 minutes. Deploy a shared limiter if running multiple API processes. The app does not trust forwarded client IP headers by default.
 
@@ -106,6 +125,7 @@ Signing in or registering creates an eight-hour database session and a signed HS
 - **Inventory:** administrators can list/search all devices, filter by assignment status, and add/edit device metadata.
 - **Returns/history:** administrators can return received equipment and review the append-only assignment audit trail. Employees receive only personal list-change notifications.
 - **Accounts:** administrators can view registered users/roles and link or unlink employee records; the UI does not expose role escalation or account deletion.
+- **Invitations/account status:** administrators create/revoke invitations and deactivate/reactivate employee accounts. Inactive accounts cannot sign in or use existing sessions. Reactivation requires a fresh sign-in.
 - **My account:** edit your name or change your password. Email is a read-only sign-in identifier.
 - **Sign out:** revokes the current server session and closes its active WebSockets; the frontend clears the token and Apollo cache.
 - **Change password:** verifies the current password and revokes every session for that account, requiring a new sign-in on every device.
@@ -168,14 +188,14 @@ This is a working internal POC, not yet ready for unrestricted public use. The t
 
 | Area | Current limitation | How to address it later |
 | --- | --- | --- |
-| Registration | Anyone who can reach registration may create an employee account. The first successful registration receives admin access. | Complete initial setup privately, then implement admin invitations or approval and close public registration. |
+| Registration | Invitation-only after initial setup. The first reachable account is still trusted to become admin. Invitations are shared manually rather than emailed. | Perform bootstrap privately; integrate email delivery/verification or an explicit deployment setup key if the bootstrap endpoint must be reachable publicly. |
 | Browser sessions | JWTs are in localStorage, accessible to scripts on this origin. Sessions are revocable, but XSS could steal a live token. | Move browser authentication to HttpOnly cookies, with Secure/SameSite attributes, CSRF validation, and authenticated WebSocket setup. |
 | Origins and transport | Development CORS is permissive; WebSocket origins are not allowlisted. Local development uses HTTP/WS. | Configure explicit trusted origins for HTTP and WebSockets and terminate HTTPS/WSS at the deployment boundary. |
-| Data visibility | Equipment is now owner/admin-only and events are filtered. Basic names, business emails, roles, and teams remain workspace-wide; public registration still grants access to those basic fields. | Close registration through invitations/approval; add finer directory-field or team-specific permissions if organizational requirements demand them. |
+| Data visibility | Equipment is owner/admin-only and events are filtered. Invited active accounts can read basic names, business emails, roles, and teams workspace-wide. | Add finer directory-field or team-specific permissions if organizational requirements demand them. |
 | Employee/team management | Employee creation exists as an admin API; there is no complete onboarding/edit/deactivation UI. | Add employee/team management screens and soft deactivation while preserving historical references. |
 | Equipment lifecycle/audit | Add/edit/search, assignment/reassignment, returns, and assignment history work. Retirement, structured condition tracking, and general account/security auditing remain absent. Existing pre-milestone assignments have no historical reconstruction. | Add retirement/condition workflows and broader audit events. Define retention/access rules and off-host immutable audit export if stronger tamper resistance is needed. |
 | Employee requests | Employees cannot request devices or track approvals. | Add equipment requests, admin approvals, and status notifications after account/employee linking. |
-| Account administration | Admins can list accounts but cannot invite, deactivate, or perform account recovery. | Add invitations, deactivation with session revocation, and controlled recovery; protect the last active administrator. |
+| Account administration | Invitations, linking, deactivation/reactivation, and session revocation work. There is no role-promotion, account deletion, or account-recovery workflow. Deactivation does not return equipment automatically. | Add controlled recovery, role delegation with last-admin protection, and an explicit offboarding checklist if required. |
 | Password recovery | No email verification or forgotten-password email flow. | Integrate an email provider and hashed, expiring, single-use verification/reset tokens; do not email passwords. |
 | Pagination/query cost | Inventory is bounded; directory/accounts lists and nested GraphQL query depth are not bounded. | Add pagination to remaining lists and query depth/complexity/request limits. |
 | Authentication throttling | Limits are in API-process memory and reset on restart; clients behind one address share the limit. | Add persistent/shared throttling and monitoring when deployment warrants it; only trust proxy IP headers from known proxies. |
@@ -191,12 +211,12 @@ Keep `DATABASE_URL` pointed at a writable **persistent local disk**, not ephemer
 
 1. **Equipment inventory — implemented and verified.**
 2. **Employee/account linking and personal equipment visibility — implemented and verified.**
-3. **Assignment returns and assignment audit history — implemented, ready for verification.**
-4. Invitation-based access and account deactivation.
+3. **Assignment returns and assignment audit history — implemented and verified.**
+4. **Invitation-based access and account deactivation — implemented, ready for verification.**
 5. Browser cookie sessions, trusted origins, and remaining security hardening.
 6. Employee/team management and equipment request/approval workflows.
 
-The order can be adjusted after each verification. SQLite stays in place throughout these milestones. Do not expose the POC broadly while the registration, origin, and browser-session limitations above remain.
+The order can be adjusted after each verification. SQLite stays in place throughout these milestones. Do not expose the POC broadly before addressing bootstrap protection, trusted origins, browser sessions, and dependency maintenance.
 
 ## Commands and verification
 

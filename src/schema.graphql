@@ -23,6 +23,8 @@ type Equipment {
 }
 
 type Query {
+  registrationOpen: Boolean!
+  invitations(offset: Int = 0, limit: Int = 20): InvitationPage!
   equipmentHistory(equipmentId: ID, offset: Int = 0, limit: Int = 20): AssignmentHistoryPage!
   myEquipment: [Equipment!]!
   equipmentInventory(search: String, assigned: Boolean, offset: Int = 0, limit: Int = 20): EquipmentPage!
@@ -41,6 +43,9 @@ input PublicEmployeeInput {
 }
 
 type Mutation {
+  createInvitation(email: String!): InvitationPayload!
+  revokeInvitation(id: ID!): Boolean!
+  setAccountActive(userId: ID!, active: Boolean!): User!
   returnEquipment(equipmentId: ID!, expectedEmployeeId: ID!, notes: String): Equipment!
   linkAccountToEmployee(userId: ID!, employeeId: ID): User!
   createEquipment(input: EquipmentInput!): Equipment!
@@ -58,9 +63,12 @@ input EquipmentInput { type: String! model: String! serialNumber: String! }
 type EquipmentPage { items: [Equipment!]! total: Int! }
 
 enum AccountRole { ADMIN EMPLOYEE }
-type User { id: ID! name: String! email: String! role: AccountRole! employee: Employee }
+type User { id: ID! name: String! email: String! role: AccountRole! active: Boolean! employee: Employee }
 type AuthPayload { token: String! user: User! expiresAt: String! }
-input RegisterInput { name: String! email: String! password: String! }
+input RegisterInput { name: String! email: String! password: String! invitationToken: String }
+type Invitation { id: ID! email: String! createdAt: String! expiresAt: String! acceptedAt: String revokedAt: String }
+type InvitationPayload { token: String! invitation: Invitation! }
+type InvitationPage { items: [Invitation!]! total: Int! }
 
 type Subscription {
   equipmentReturned: Equipment!

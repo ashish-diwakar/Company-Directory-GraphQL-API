@@ -10,7 +10,7 @@ import { createDatabase } from '../src/db.js';
 import { createSchema } from '../src/server.js';
 import { createContext } from '../src/context.js';
 import { resolveIdentity } from '../src/auth.js';
-import { register } from '../src/accounts.js';
+import { registerTestUser as register } from './helpers/register.js';
 import { seedDatabase } from '../prisma/seed.js';
 import { pubsub } from '../src/pubsub.js';
 import { WebSocket } from 'ws';

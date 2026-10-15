@@ -17,10 +17,24 @@ model User {
   email String @unique
   passwordHash String
   role AccountRole @default(EMPLOYEE)
+  active Boolean @default(true)
   createdAt DateTime @default(now())
   sessions Session[]
   employeeId String? @unique
   employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+}
+
+model Invitation {
+  id String @id @default(uuid())
+  email String
+  tokenHash String @unique
+  createdById String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  acceptedAt DateTime?
+  revokedAt DateTime?
+  @@index([email])
+  @@index([createdAt])
 }
 
 model Session {

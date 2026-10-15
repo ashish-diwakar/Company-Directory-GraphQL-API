@@ -4,7 +4,16 @@ import { requireAdmin } from '../auth.js';
 import { register, signIn, signOut, changePassword, sessionUser, validateName, throttleAuthentication, sessionEvents } from '../accounts.js';
 import { equipmentInput } from '../inventory.js';
 import { changeAssignment } from '../equipment-lifecycle.js';
+import { createInvitation, setAccountActive } from '../invitations.js';
 export const mutations: MutationResolvers = {
+  createInvitation: (_, { email }, { db, user }) => createInvitation(db, user, email),
+  setAccountActive: (_, { userId, active }, { db, user }) => setAccountActive(db, user, userId, active),
+  revokeInvitation: async (_, { id }, { db, user }) => {
+    requireAdmin(user);
+    const result = await db.invitation.updateMany({ where: { id, acceptedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
+    if (!result.count && !await db.invitation.findUnique({ where: { id } })) throw notFound('Invitation', id);
+    return true;
+  },
   returnEquipment: async (_, { equipmentId, expectedEmployeeId, notes }, { db, user, loaders, pubsub }) => {
     requireAdmin(user);
     try {

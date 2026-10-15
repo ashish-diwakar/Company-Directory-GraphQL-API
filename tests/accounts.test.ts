@@ -51,7 +51,16 @@ describe('Account registration and revocable sessions', () => {
   });
   it('creates exactly one admin under simultaneous registrations and stores only password hashes', async () => {
     const results = await Promise.all(['first', 'second'].map(name => post(registration, { input: { name, email: `${name}@example.com`, password } })));
-    for (const response of results) expect(response.body.errors).toBeUndefined();
+    const success = results.filter(response => !response.body.errors);
+    expect(success).toHaveLength(1);
+    expect(results.filter(response => response.body.errors)).toHaveLength(1);
+    adminToken = success[0]!.body.data.register.token;
+    const missingEmail = results[0]!.body.errors ? 'first@example.com' : 'second@example.com';
+    const invite = await post('mutation($email:String!) { createInvitation(email:$email) { token } }', { email: missingEmail }, adminToken);
+    expect(invite.body.errors).toBeUndefined();
+    const joined = await post(registration, { input: { name: 'Invited Employee', email: missingEmail, password, invitationToken: invite.body.data.createInvitation.token } });
+    expect(joined.body.errors).toBeUndefined();
+    employeeToken = joined.body.data.register.token;
     const accounts = await db.user.findMany();
     expect(accounts.filter(user => user.role === 'ADMIN')).toHaveLength(1);
     expect(accounts.filter(user => user.role === 'EMPLOYEE')).toHaveLength(1);
@@ -59,8 +68,6 @@ describe('Account registration and revocable sessions', () => {
       expect(account.passwordHash).not.toContain(password);
       expect(await verifyPassword(password, account.passwordHash)).toBe(true);
     }
-    adminToken = results.find(result => result.body.data.register.user.role === 'ADMIN')!.body.data.register.token;
-    employeeToken = results.find(result => result.body.data.register.user.role === 'EMPLOYEE')!.body.data.register.token;
   });
   it('normalizes email, rejects duplicate registrations, and does not accept a client role', async () => {
     const response = await post(registration, { input: { name: 'Duplicate', email: ' FIRST@EXAMPLE.COM ', password } });

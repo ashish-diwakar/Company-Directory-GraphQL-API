@@ -4,6 +4,14 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { requireUser, requireAdmin } from '../auth.js';
 import { sessionUser } from '../accounts.js';
 export const queries: QueryResolvers = {
+  registrationOpen: async (_, __, { db }) => await db.user.count() === 0,
+  invitations: async (_, { offset, limit }, { db, user }) => {
+    requireAdmin(user);
+    const start = offset ?? 0; const size = limit ?? 20;
+    if (start < 0 || size < 1 || size > 100) throw badInput('Offset must be nonnegative and limit between 1 and 100.');
+    const [total, items] = await db.$transaction([db.invitation.count(), db.invitation.findMany({ skip: start, take: size, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })]);
+    return { total, items };
+  },
   equipmentHistory: async (_, { equipmentId, offset, limit }, { db, user }) => {
     requireAdmin(user);
     const start = offset ?? 0;

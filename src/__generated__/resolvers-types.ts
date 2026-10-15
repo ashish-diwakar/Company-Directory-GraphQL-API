@@ -1,5 +1,5 @@
 import type { GraphQLResolveInfo } from 'graphql';
-import type { AssignmentEventRecord, UserRecord, EmployeeRecord, TeamRecord, EquipmentRecord } from '../data/models.js';
+import type { InvitationRecord, AssignmentEventRecord, UserRecord, EmployeeRecord, TeamRecord, EquipmentRecord } from '../data/models.js';
 import type { Context } from '../context.js';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
@@ -92,15 +92,40 @@ export type EquipmentPage = {
   total: Scalars['Int']['output'];
 };
 
+export type Invitation = {
+  __typename?: 'Invitation';
+  acceptedAt?: Maybe<Scalars['String']['output']>;
+  createdAt: Scalars['String']['output'];
+  email: Scalars['String']['output'];
+  expiresAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  revokedAt?: Maybe<Scalars['String']['output']>;
+};
+
+export type InvitationPage = {
+  __typename?: 'InvitationPage';
+  items: Array<Invitation>;
+  total: Scalars['Int']['output'];
+};
+
+export type InvitationPayload = {
+  __typename?: 'InvitationPayload';
+  invitation: Invitation;
+  token: Scalars['String']['output'];
+};
+
 export type Mutation = {
   __typename?: 'Mutation';
   assignEquipment: Equipment;
   changePassword: Scalars['Boolean']['output'];
   createEmployee: Employee;
   createEquipment: Equipment;
+  createInvitation: InvitationPayload;
   linkAccountToEmployee: User;
   register: AuthPayload;
   returnEquipment: Equipment;
+  revokeInvitation: Scalars['Boolean']['output'];
+  setAccountActive: User;
   signIn: AuthPayload;
   signOut: Scalars['Boolean']['output'];
   updateEquipment: Equipment;
@@ -130,6 +155,11 @@ export type MutationCreateEquipmentArgs = {
 };
 
 
+export type MutationCreateInvitationArgs = {
+  email: Scalars['String']['input'];
+};
+
+
 export type MutationLinkAccountToEmployeeArgs = {
   employeeId?: InputMaybe<Scalars['ID']['input']>;
   userId: Scalars['ID']['input'];
@@ -145,6 +175,17 @@ export type MutationReturnEquipmentArgs = {
   equipmentId: Scalars['ID']['input'];
   expectedEmployeeId: Scalars['ID']['input'];
   notes?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationRevokeInvitationArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationSetAccountActiveArgs = {
+  active: Scalars['Boolean']['input'];
+  userId: Scalars['ID']['input'];
 };
 
 
@@ -177,8 +218,10 @@ export type Query = {
   employees: Array<Employee>;
   equipmentHistory: AssignmentHistoryPage;
   equipmentInventory: EquipmentPage;
+  invitations: InvitationPage;
   me?: Maybe<User>;
   myEquipment: Array<Equipment>;
+  registrationOpen: Scalars['Boolean']['output'];
   teams: Array<Team>;
   users: Array<User>;
 };
@@ -208,8 +251,15 @@ export type QueryEquipmentInventoryArgs = {
   search?: InputMaybe<Scalars['String']['input']>;
 };
 
+
+export type QueryInvitationsArgs = {
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+};
+
 export type RegisterInput = {
   email: Scalars['String']['input'];
+  invitationToken?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
   password: Scalars['String']['input'];
 };
@@ -231,6 +281,7 @@ export type Team = {
 
 export type User = {
   __typename?: 'User';
+  active: Scalars['Boolean']['output'];
   email: Scalars['String']['output'];
   employee?: Maybe<Employee>;
   id: Scalars['ID']['output'];
@@ -323,6 +374,9 @@ export type ResolversTypes = {
   EquipmentPage: ResolverTypeWrapper<Omit<EquipmentPage, 'items'> & { items: Array<ResolversTypes['Equipment']> }>;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
+  Invitation: ResolverTypeWrapper<InvitationRecord>;
+  InvitationPage: ResolverTypeWrapper<Omit<InvitationPage, 'items'> & { items: Array<ResolversTypes['Invitation']> }>;
+  InvitationPayload: ResolverTypeWrapper<Omit<InvitationPayload, 'invitation'> & { invitation: ResolversTypes['Invitation'] }>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
   PublicEmployeeInput: PublicEmployeeInput;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
@@ -345,6 +399,9 @@ export type ResolversParentTypes = {
   EquipmentPage: Omit<EquipmentPage, 'items'> & { items: Array<ResolversParentTypes['Equipment']> };
   ID: Scalars['ID']['output'];
   Int: Scalars['Int']['output'];
+  Invitation: InvitationRecord;
+  InvitationPage: Omit<InvitationPage, 'items'> & { items: Array<ResolversParentTypes['Invitation']> };
+  InvitationPayload: Omit<InvitationPayload, 'invitation'> & { invitation: ResolversParentTypes['Invitation'] };
   Mutation: Record<PropertyKey, never>;
   PublicEmployeeInput: PublicEmployeeInput;
   Query: Record<PropertyKey, never>;
@@ -405,14 +462,36 @@ export type EquipmentPageResolvers<ContextType = Context, ParentType extends Res
   total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 };
 
+export type InvitationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Invitation'] = ResolversParentTypes['Invitation']> = {
+  acceptedAt?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  expiresAt?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  revokedAt?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+};
+
+export type InvitationPageResolvers<ContextType = Context, ParentType extends ResolversParentTypes['InvitationPage'] = ResolversParentTypes['InvitationPage']> = {
+  items?: Resolver<Array<ResolversTypes['Invitation']>, ParentType, ContextType>;
+  total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+};
+
+export type InvitationPayloadResolvers<ContextType = Context, ParentType extends ResolversParentTypes['InvitationPayload'] = ResolversParentTypes['InvitationPayload']> = {
+  invitation?: Resolver<ResolversTypes['Invitation'], ParentType, ContextType>;
+  token?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
 export type MutationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = {
   assignEquipment?: Resolver<ResolversTypes['Equipment'], ParentType, ContextType, RequireFields<MutationAssignEquipmentArgs, 'employeeId' | 'equipmentId'>>;
   changePassword?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationChangePasswordArgs, 'currentPassword' | 'newPassword'>>;
   createEmployee?: Resolver<ResolversTypes['Employee'], ParentType, ContextType, RequireFields<MutationCreateEmployeeArgs, 'input'>>;
   createEquipment?: Resolver<ResolversTypes['Equipment'], ParentType, ContextType, RequireFields<MutationCreateEquipmentArgs, 'input'>>;
+  createInvitation?: Resolver<ResolversTypes['InvitationPayload'], ParentType, ContextType, RequireFields<MutationCreateInvitationArgs, 'email'>>;
   linkAccountToEmployee?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationLinkAccountToEmployeeArgs, 'userId'>>;
   register?: Resolver<ResolversTypes['AuthPayload'], ParentType, ContextType, RequireFields<MutationRegisterArgs, 'input'>>;
   returnEquipment?: Resolver<ResolversTypes['Equipment'], ParentType, ContextType, RequireFields<MutationReturnEquipmentArgs, 'equipmentId' | 'expectedEmployeeId'>>;
+  revokeInvitation?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationRevokeInvitationArgs, 'id'>>;
+  setAccountActive?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationSetAccountActiveArgs, 'active' | 'userId'>>;
   signIn?: Resolver<ResolversTypes['AuthPayload'], ParentType, ContextType, RequireFields<MutationSignInArgs, 'email' | 'password'>>;
   signOut?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   updateEquipment?: Resolver<ResolversTypes['Equipment'], ParentType, ContextType, RequireFields<MutationUpdateEquipmentArgs, 'id' | 'input'>>;
@@ -424,8 +503,10 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   employees?: Resolver<Array<ResolversTypes['Employee']>, ParentType, ContextType, Partial<QueryEmployeesArgs>>;
   equipmentHistory?: Resolver<ResolversTypes['AssignmentHistoryPage'], ParentType, ContextType, RequireFields<QueryEquipmentHistoryArgs, 'limit' | 'offset'>>;
   equipmentInventory?: Resolver<ResolversTypes['EquipmentPage'], ParentType, ContextType, RequireFields<QueryEquipmentInventoryArgs, 'limit' | 'offset'>>;
+  invitations?: Resolver<ResolversTypes['InvitationPage'], ParentType, ContextType, RequireFields<QueryInvitationsArgs, 'limit' | 'offset'>>;
   me?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType>;
   myEquipment?: Resolver<Array<ResolversTypes['Equipment']>, ParentType, ContextType>;
+  registrationOpen?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   teams?: Resolver<Array<ResolversTypes['Team']>, ParentType, ContextType>;
   users?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
 };
@@ -444,6 +525,7 @@ export type TeamResolvers<ContextType = Context, ParentType extends ResolversPar
 };
 
 export type UserResolvers<ContextType = Context, ParentType extends ResolversParentTypes['User'] = ResolversParentTypes['User']> = {
+  active?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   employee?: Resolver<Maybe<ResolversTypes['Employee']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
@@ -458,6 +540,9 @@ export type Resolvers<ContextType = Context> = {
   Employee?: EmployeeResolvers<ContextType>;
   Equipment?: EquipmentResolvers<ContextType>;
   EquipmentPage?: EquipmentPageResolvers<ContextType>;
+  Invitation?: InvitationResolvers<ContextType>;
+  InvitationPage?: InvitationPageResolvers<ContextType>;
+  InvitationPayload?: InvitationPayloadResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;

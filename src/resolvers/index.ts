@@ -13,4 +13,10 @@ export const resolvers: Resolvers = {
   Equipment: equipmentFields,
   User: userFields,
   AssignmentEvent: { createdAt: event => event.createdAt.toISOString() },
+  Invitation: {
+    createdAt: invitation => invitation.createdAt.toISOString(),
+    expiresAt: invitation => invitation.expiresAt.toISOString(),
+    acceptedAt: invitation => invitation.acceptedAt?.toISOString() ?? null,
+    revokedAt: invitation => invitation.revokedAt?.toISOString() ?? null,
+  },
 };

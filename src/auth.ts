@@ -39,7 +39,7 @@ export async function resolveIdentity(authorization: unknown, db: PrismaClient):
   // All network identities must be backed by a revocable, persisted session.
   if (!identity.sessionId) throw unauthenticated();
   const session = await db.session.findUnique({ where: { id: identity.sessionId }, include: { user: true } });
-  if (!session || session.userId !== identity.id || session.expiresAt.getTime() <= Date.now()) throw unauthenticated();
+  if (!session || !session.user.active || session.userId !== identity.id || session.expiresAt.getTime() <= Date.now()) throw unauthenticated();
   return { id: session.user.id, email: session.user.email, role: session.user.role, sessionId: session.id, expiresAt: session.expiresAt.getTime(), employeeId: session.user.employeeId };
 }
 
