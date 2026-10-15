@@ -5,6 +5,7 @@ import { client } from './apollo-client';
 import App from './App';
 import './styles.css';
 import './auth.css';
+import './inventory.css';
 function Root() {
   const [session, setSession] = useState({ client, generation: 0 });
   useEffect(() => {

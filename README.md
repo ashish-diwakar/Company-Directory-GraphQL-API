@@ -2,6 +2,26 @@
 
 A React workspace for people, teams, and equipment, backed by Apollo Server 4, Prisma 7, SQLite, and live GraphQL subscriptions. The frontend uses Vite, TypeScript, and Apollo Client.
 
+**POC scope:** one organization running one API instance with a persistent SQLite database. SQLite remains the supported database; the remaining improvements will be delivered one feature at a time for manual verification.
+
+## Latest feature: equipment inventory
+
+Administrators now have an **Inventory** screen to list all devices, including unassigned stock, search by type/model/serial number, filter by assignment status, and add or edit device details. Results are paginated (20 per screen; the API allows at most 100 per request). Newly created devices are unassigned. Editing details preserves the current owner. Serial numbers are unique, trimmed, and normalized to uppercase; type, model, and serial number each allow 1–100 characters.
+
+The Directory's assignment form now searches the full inventory and offers unassigned devices directly, with paginated choices. UUID copying is no longer needed. All inventory queries and mutations require an administrator on the backend. No database migration or seed reset is needed for this feature.
+
+### Verify this feature
+
+1. Sign in as the first registered administrator and open **Inventory**.
+2. Choose **Add device**. Enter type `Laptop`, model `POC Workstation`, and a unique serial such as `POC-005`. Save and verify it appears as **Unassigned**.
+3. Search for its serial, then choose **Unassigned** in the status filter. The device should remain visible.
+4. Try adding another device with the same serial (including lowercase or surrounding spaces). Expect a clear duplicate-serial error. Blank fields and values over 100 characters are rejected.
+5. Open **Directory**, select an employee, search for `POC-005`, and assign the new device. Verify it appears under that employee and produces a live alert.
+6. Return to **Inventory** and filter **Assigned**. Edit the device's model, save, and verify its owner is unchanged. Reload to confirm persistence.
+7. Sign in with an employee account. The Inventory navigation should be absent; opening `#inventory` directly should show an access-denied message. Backend inventory requests must return `FORBIDDEN` too.
+
+Please verify this milestone before moving to the next one. Returns, retirement, assignment history, invitations, and session-cookie changes are separate future milestones.
+
 ## Start locally
 
 Use Node.js 22.12+ or 24+ and run commands from the project root:
@@ -38,6 +58,7 @@ Signing in or registering creates an eight-hour database session and a signed HS
 
 - **Directory:** authenticated accounts can browse people and teams and receive live assignment updates.
 - **Assignment / employee creation:** admin-only mutations enforced by the server.
+- **Inventory:** administrators can list/search all devices, filter by assignment status, and add/edit device metadata.
 - **Accounts:** administrators can view registered users and their roles; the UI does not expose role escalation or account deletion.
 - **My account:** edit your name or change your password. Email is a read-only sign-in identifier.
 - **Sign out:** revokes the current server session and closes its active WebSockets; the frontend clears the token and Apollo cache.
@@ -91,9 +112,45 @@ mutation SignOut { signOut }
 
 HTTP requests use `Authorization: Bearer <session token>`. WebSocket clients pass `{ "authToken": "<session token>" }` in connection parameters. The website manages this automatically. Sandbox introspection is public in development, but directory data requires a session. Invalid supplied tokens fail context creation with HTTP 401 and `UNAUTHENTICATED`. Resolver access failures return GraphQL `UNAUTHENTICATED` or `FORBIDDEN`; missing records use `NOT_FOUND`; invalid input uses `BAD_USER_INPUT`.
 
-Equipment choices come from assigned equipment returned by the directory. The admin form also accepts an equipment UUID because the API has no all-equipment query. Reassignment publishes after its transaction commits, refreshes the frontend directory, and invalidates affected loader caches. Every relationship batches through a request/operation-scoped DataLoader; subscription caches clear for each event.
+Equipment choices come from the admin-only paginated `equipmentInventory` query. `createEquipment` and `updateEquipment` accept `EquipmentInput` (`type`, `model`, `serialNumber`). Inventory changes and assignment mutations refresh active inventory queries. Metadata edits do not publish assignment events; use Refresh in another browser to see edits. Reassignment publishes after its transaction commits, refreshes the frontend directory, and invalidates affected loader caches. Every relationship batches through a request/operation-scoped DataLoader; subscription caches clear for each event.
 
 PubSub and session-close notifications are process-local, without replay or guaranteed delivery across process crashes. Use a shared broker/session-revocation channel for multiple replicas, and an outbox if guaranteed assignment-event delivery is required.
+
+## Current limitations and future improvements
+
+This is a working internal POC, not yet ready for unrestricted public use. The table distinguishes implemented behavior from future work; those future changes have not been silently enabled.
+
+| Area | Current limitation | How to address it later |
+| --- | --- | --- |
+| Registration | Anyone who can reach registration may create an employee account. The first successful registration receives admin access. | Complete initial setup privately, then implement admin invitations or approval and close public registration. |
+| Browser sessions | JWTs are in localStorage, accessible to scripts on this origin. Sessions are revocable, but XSS could steal a live token. | Move browser authentication to HttpOnly cookies, with Secure/SameSite attributes, CSRF validation, and authenticated WebSocket setup. |
+| Origins and transport | Development CORS is permissive; WebSocket origins are not allowlisted. Local development uses HTTP/WS. | Configure explicit trusted origins for HTTP and WebSockets and terminate HTTPS/WSS at the deployment boundary. |
+| Data visibility | Signed-in employees can currently read other employees' equipment/serial numbers and receive workspace-wide assignment events. | Link accounts to employee records and enforce owner-aware fields/events; keep only basic directory information shared. |
+| Employee/team management | Employee creation exists as an admin API; there is no complete onboarding/edit/deactivation UI. | Add employee/team management screens and soft deactivation while preserving historical references. |
+| Equipment lifecycle | Add, edit, search, assignment, and reassignment work. Return, retirement, condition tracking, and audit history are not implemented. | Add explicit return/retirement actions and an append-only audit trail recording actor, time, and prior/new owner. |
+| Employee requests | Employees cannot request devices or track approvals. | Add equipment requests, admin approvals, and status notifications after account/employee linking. |
+| Account administration | Admins can list accounts but cannot invite, deactivate, or perform account recovery. | Add invitations, deactivation with session revocation, and controlled recovery; protect the last active administrator. |
+| Password recovery | No email verification or forgotten-password email flow. | Integrate an email provider and hashed, expiring, single-use verification/reset tokens; do not email passwords. |
+| Pagination/query cost | Inventory is bounded; directory/accounts lists and nested GraphQL query depth are not bounded. | Add pagination to remaining lists and query depth/complexity/request limits. |
+| Authentication throttling | Limits are in API-process memory and reset on restart; clients behind one address share the limit. | Add persistent/shared throttling and monitoring when deployment warrants it; only trust proxy IP headers from known proxies. |
+| SQLite | One file on one host, one writer at a time; no automatic replication or high availability. | Keep a single API instance and persistent local storage, use short transactions and tested backups. Add WAL/busy-timeout tuning after measuring contention. Consider PostgreSQL only if future scale/availability requirements justify changing databases. |
+| Live events | PubSub and session-close signals are local to one process; events are not replayed and publishing is separate from the database commit. | Use an outbox for durable event delivery and a shared broker/revocation channel if multiple instances become necessary. |
+| Deployment/security maintenance | Apollo Server 4 is retained; dependency findings, headers, operational monitoring, and production hardening still require review. | Upgrade to a supported Apollo version, address dependency vulnerabilities, add security headers/structured logs and deployment checks. |
+
+### SQLite storage and backups
+
+Keep `DATABASE_URL` pointed at a writable **persistent local disk**, not ephemeral container storage or a shared network drive. Do not commit or publish the database: it contains account hashes and active sessions. For the current POC, stop the backend cleanly before copying the SQLite file to a restricted backup location, then restart it. Test recovery using a separate file/environment before trusting a backup; never overwrite a running database. If WAL is enabled later, use a SQLite-aware backup/checkpoint procedure rather than copying only the main file while writes continue. Automate encrypted backups and recovery checks before storing important organizational data.
+
+### Planned milestones
+
+1. **Equipment inventory — implemented, ready for verification.**
+2. Employee/account linking and personal equipment visibility.
+3. Assignment return/history and audit logging.
+4. Invitation-based access and account deactivation.
+5. Browser cookie sessions, trusted origins, and remaining security hardening.
+6. Employee/team management and equipment request/approval workflows.
+
+The order can be adjusted after each verification. SQLite stays in place throughout these milestones. Do not expose the POC broadly while the access, origin, and data-visibility limitations above remain.
 
 ## Commands and verification
 

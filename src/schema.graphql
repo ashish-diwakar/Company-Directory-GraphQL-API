@@ -23,6 +23,7 @@ type Equipment {
 }
 
 type Query {
+  equipmentInventory(search: String, assigned: Boolean, offset: Int = 0, limit: Int = 20): EquipmentPage!
   me: User
   users: [User!]!
   employees(role: String): [Employee!]!
@@ -38,6 +39,8 @@ input PublicEmployeeInput {
 }
 
 type Mutation {
+  createEquipment(input: EquipmentInput!): Equipment!
+  updateEquipment(id: ID!, input: EquipmentInput!): Equipment!
   register(input: RegisterInput!): AuthPayload!
   signIn(email: String!, password: String!): AuthPayload!
   signOut: Boolean!
@@ -46,6 +49,9 @@ type Mutation {
   createEmployee(input: PublicEmployeeInput!): Employee!
   assignEquipment(employeeId: ID!, equipmentId: ID!): Equipment!
 }
+
+input EquipmentInput { type: String! model: String! serialNumber: String! }
+type EquipmentPage { items: [Equipment!]! total: Int! }
 
 enum AccountRole { ADMIN EMPLOYEE }
 type User { id: ID! name: String! email: String! role: AccountRole! }

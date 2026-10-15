@@ -2,7 +2,23 @@ import type { MutationResolvers } from '../__generated__/resolvers-types.js';
 import { badInput, databaseError, notFound } from '../errors.js';
 import { requireAdmin } from '../auth.js';
 import { register, signIn, signOut, changePassword, sessionUser, validateName, throttleAuthentication } from '../accounts.js';
+import { equipmentInput } from '../inventory.js';
 export const mutations: MutationResolvers = {
+  createEquipment: async (_, { input }, { db, user }) => {
+    requireAdmin(user);
+    const data = equipmentInput(input);
+    try { return await db.equipment.create({ data }); }
+    catch (error) { databaseError(error, 'An equipment item with this serial number already exists.'); }
+  },
+  updateEquipment: async (_, { id, input }, { db, user, loaders }) => {
+    requireAdmin(user);
+    const data = equipmentInput(input);
+    try {
+      const equipment = await db.equipment.update({ where: { id }, data });
+      if (equipment.assignedToId) loaders.equipment.clear(equipment.assignedToId);
+      return equipment;
+    } catch (error) { databaseError(error, 'An equipment item with this serial number already exists.'); }
+  },
   register: (_, { input }, { db, clientAddress }) => { throttleAuthentication(clientAddress); return register(db, input); },
   signIn: (_, { email, password }, { db, clientAddress }) => { throttleAuthentication(clientAddress); return signIn(db, email, password); },
   signOut: (_, __, { db, user }) => signOut(db, user),

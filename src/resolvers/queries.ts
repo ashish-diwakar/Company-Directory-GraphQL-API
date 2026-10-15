@@ -1,8 +1,26 @@
 import type { QueryResolvers } from '../__generated__/resolvers-types.js';
-import { notFound } from '../errors.js';
+import { notFound, badInput } from '../errors.js';
+import type { Prisma } from '../generated/prisma/client.js';
 import { requireUser, requireAdmin } from '../auth.js';
 import { sessionUser } from '../accounts.js';
 export const queries: QueryResolvers = {
+  equipmentInventory: async (_, { search, assigned, offset = 0, limit = 20 }, { db, user }) => {
+    requireAdmin(user);
+    const start = offset ?? 0;
+    const size = limit ?? 20;
+    if (start < 0 || size < 1 || size > 100) throw badInput('Offset must be nonnegative and limit must be between 1 and 100.');
+    const term = search?.trim() ?? '';
+    if (term.length > 100) throw badInput('Search must contain at most 100 characters.');
+    const where: Prisma.EquipmentWhereInput = {
+      ...(assigned == null ? {} : { assignedToId: assigned ? { not: null } : null }),
+      ...(term ? { OR: [{ type: { contains: term } }, { model: { contains: term } }, { serialNumber: { contains: term } }] } : {}),
+    };
+    const [total, items] = await db.$transaction([
+      db.equipment.count({ where }),
+      db.equipment.findMany({ where, skip: start, take: size, orderBy: [{ model: 'asc' }, { id: 'asc' }] }),
+    ]);
+    return { items, total };
+  },
   me: (_, __, { db, user }) => user ? sessionUser(db, user) : null,
   users: (_, __, { db, user }) => { requireAdmin(user); return db.user.findMany({ orderBy: { createdAt: 'asc' } }); },
   employees: (_, { role }, { db, user }) => { requireUser(user); return db.employee.findMany({ where: role == null ? {} : { role }, orderBy: { id: 'asc' } }); },
