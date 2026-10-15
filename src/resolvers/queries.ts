@@ -4,6 +4,7 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { requireUser, requireAdmin } from '../auth.js';
 import { sessionUser } from '../accounts.js';
 export const queries: QueryResolvers = {
+  sessionExpiresAt: (_, __, { user }) => user?.expiresAt ? new Date(user.expiresAt).toISOString() : null,
   employeeManagement: async (_, { search, teamId, offset, limit }, { db, user }) => {
     requireAdmin(user);
     const start = offset ?? 0; const size = limit ?? 20; const term = search?.trim() ?? '';

@@ -250,6 +250,7 @@ export type Query = {
   me?: Maybe<User>;
   myEquipment: Array<Equipment>;
   registrationOpen: Scalars['Boolean']['output'];
+  sessionExpiresAt?: Maybe<Scalars['String']['output']>;
   teams: Array<Team>;
   users: Array<User>;
 };
@@ -554,6 +555,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   me?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType>;
   myEquipment?: Resolver<Array<ResolversTypes['Equipment']>, ParentType, ContextType>;
   registrationOpen?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  sessionExpiresAt?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   teams?: Resolver<Array<ResolversTypes['Team']>, ParentType, ContextType>;
   users?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
 };

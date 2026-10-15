@@ -82,14 +82,24 @@ export const mutations: MutationResolvers = {
       return equipment;
     } catch (error) { databaseError(error, 'An equipment item with this serial number already exists.'); }
   },
-  register: (_, { input }, { db, clientAddress }) => { throttleAuthentication(clientAddress); return register(db, input); },
-  signIn: (_, { email, password }, { db, clientAddress }) => { throttleAuthentication(clientAddress); return signIn(db, email, password); },
-  signOut: (_, __, { db, user }) => signOut(db, user),
+  register: async (_, { input }, { db, clientAddress, setBrowserSession }) => {
+    throttleAuthentication(clientAddress);
+    const session = await register(db, input); setBrowserSession?.(session); return session;
+  },
+  signIn: async (_, { email, password }, { db, clientAddress, setBrowserSession }) => {
+    throttleAuthentication(clientAddress);
+    const session = await signIn(db, email, password); setBrowserSession?.(session); return session;
+  },
+  signOut: async (_, __, { db, user, clearBrowserSession }) => {
+    const result = await signOut(db, user); clearBrowserSession?.(); return result;
+  },
   updateProfile: async (_, { name }, { db, user }) => {
     const account = await sessionUser(db, user);
     return db.user.update({ where: { id: account.id }, data: { name: validateName(name) } });
   },
-  changePassword: (_, { currentPassword, newPassword }, { db, user }) => changePassword(db, user, currentPassword, newPassword),
+  changePassword: async (_, { currentPassword, newPassword }, { db, user, clearBrowserSession }) => {
+    const result = await changePassword(db, user, currentPassword, newPassword); clearBrowserSession?.(); return result;
+  },
   createEmployee: async (_, { input }, { db, loaders, user }) => {
     requireAdmin(user);
     try {

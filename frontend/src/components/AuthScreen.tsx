@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { REGISTER, SIGN_IN, REGISTRATION_OPEN } from '../auth-operations';
 import type { AuthPayload } from '../auth-operations';
-import { changeToken } from '../apollo-client';
+import { refreshSession } from '../apollo-client';
 import { explainError } from '../errors';
 
 export function AuthScreen({ mode }: { mode: 'sign-in' | 'register' | 'help' }) {
@@ -38,7 +38,7 @@ export function AuthScreen({ mode }: { mode: 'sign-in' | 'register' | 'help' }) 
         : (await signIn({ variables: { email, password } })).data?.signIn;
       if (!result) throw new Error('Unable to start your session. Please try again.');
       window.location.hash = 'directory';
-      await changeToken(result.token);
+      await refreshSession();
     } catch (error) { setError(explainError(error)); setBusy(false); }
   }
   return <main className="auth-layout"><section className="auth-story"><p className="eyebrow">YOUR PEOPLE. ONE PLACE.</p><h1>Good work starts<br/>with good company.</h1><p className="muted">A shared home for your team, their tools, and everything that keeps work moving.</p><div className="auth-art"><span>AP</span><span>LC</span><span>MS</span><div><strong>Connected by design.</strong><p>People · Teams · Equipment</p></div></div><div className="auth-benefits"><p>01 <strong>A clear view of your organization</strong></p><p>02 <strong>The right access for every person</strong></p><p>03 <strong>Assignment updates as they happen</strong></p></div></section><section className="card auth-card" key={mode}>

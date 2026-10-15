@@ -9,6 +9,8 @@ export interface GraphQLContext {
   db: PrismaClient;
   user?: AuthUser | null;
   clientAddress?: string;
+  setBrowserSession?: (session: { token: string; expiresAt: string }) => void;
+  clearBrowserSession?: () => void;
   pubsub: typeof pubsub;
   loaders: {
     team: DataLoader<string, Team>;

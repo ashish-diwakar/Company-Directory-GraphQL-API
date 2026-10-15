@@ -23,6 +23,7 @@ type Equipment {
 }
 
 type Query {
+  sessionExpiresAt: String
   employeeManagement(search: String, teamId: ID, offset: Int = 0, limit: Int = 20): EmployeePage!
   registrationOpen: Boolean!
   invitations(offset: Int = 0, limit: Int = 20): InvitationPage!
