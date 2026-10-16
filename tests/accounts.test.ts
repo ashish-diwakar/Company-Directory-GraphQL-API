@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { createDatabase } from '../src/db.js';
-import { createApplication } from '../src/app.js';
+import { createApplication } from '../src/application.js';
 import { verifyPassword, throttleAuthentication } from '../src/accounts.js';
 import { WebSocket } from 'ws';
 import { once } from 'node:events';

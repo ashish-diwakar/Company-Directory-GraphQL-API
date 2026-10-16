@@ -2,7 +2,7 @@ import { createTestSchema, applyTestMigrations, dropTestSchema } from './databas
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import { createApplication } from '../src/app.js';
+import { createApplication } from '../src/application.js';
 import { createDatabase } from '../src/db.js';
 import { seedDatabase } from '../prisma/seed.js';
 import { pubsub } from '../src/pubsub.js';

@@ -8,7 +8,7 @@ import { seedDatabase } from '../prisma/seed.js';
 import jwt from 'jsonwebtoken';
 import { WebSocket } from 'ws';
 import { once } from 'node:events';
-import { createApplication } from '../src/app.js';
+import { createApplication } from '../src/application.js';
 import { pubsub } from '../src/pubsub.js';
 const admin = { id: 'test-admin', email: 'admin@example.com', role: 'ADMIN' } as const;
 interface OperationData {

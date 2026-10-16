@@ -3,7 +3,7 @@ import { beforeAll, afterAll, describe, it, expect, jest } from '@jest/globals';
 import request from 'supertest';
 import { parse, subscribe } from 'graphql';
 import type { ExecutionResult } from 'graphql';
-import { createApplication } from '../src/app.js';
+import { createApplication } from '../src/application.js';
 import { createDatabase } from '../src/db.js';
 import { createSchema } from '../src/server.js';
 import { createContext } from '../src/context.js';

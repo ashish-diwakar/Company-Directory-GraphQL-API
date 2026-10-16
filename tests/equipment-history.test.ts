@@ -1,7 +1,7 @@
 import { createTestSchema, applyTestMigrations, dropTestSchema } from './database.js';
 import { beforeAll, afterAll, describe, it, expect } from '@jest/globals';
 import request from 'supertest';
-import { createApplication } from '../src/app.js';
+import { createApplication } from '../src/application.js';
 import { createDatabase } from '../src/db.js';
 import { registerTestUser as register } from './helpers/register.js';
 import { seedDatabase } from '../prisma/seed.js';

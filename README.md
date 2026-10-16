@@ -179,7 +179,15 @@ Coverage includes first-admin concurrency, invitations, authentication/RBAC, coo
 
 ## Deployment and current limitations
 
-**PostgreSQL support does not by itself complete a Vercel deployment.** No Vercel service/routing configuration or hosted database is provisioned here. Review framework entrypoints, build-time generation, schema-file packaging, HTTP/WebSocket routing, function lifecycle, and the process-local state listed below before deployment.
+### Vercel backend deployment
+
+`src/app.ts` is the deployment entrypoint: its default export is the initialized Node HTTP server, including the existing WebSocket upgrade handler. It does not call listen; Vercel owns that lifecycle. `src/application.ts` contains the reusable factory, while `src/index.ts` retains local listening and graceful shutdown. This fixes the `Invalid export found in module ... src/app.js` failure caused by exporting only a factory.
+
+The root `vercel.json` selects the Express backend, runs `npm run build` (including Prisma/codegen), and includes the GraphQL SDL in the function. Import the repository root as a **backend-only** project; this configuration does not deploy the frontend workspace. Remove conflicting dashboard build/output overrides and keep the Express framework selected. Do not set the output directory to frontend/dist for this backend project.
+
+Configure DATABASE_URL with Neon's pooled URL, DIRECT_DATABASE_URL with the direct URL for migrations, a long random JWT_SECRET, and exact HTTPS ALLOWED_ORIGINS in Vercel's environment settings. Local .env values are not uploaded. When only the backend is deployed, its own HTTPS origin can be the initial allowed origin. Add the frontend's exact origin when available. Do not use localhost HTTP origins in production.
+
+Apply `npm run db:deploy` once against the intended database through a controlled migration step, then deploy/redeploy the backend. Do not seed a populated database. Verify POST `https://YOUR_BACKEND/graphql` with JSON `{ "query": "{ __typename }" }` returns `{ "data": { "__typename": "Query" } }`. Production Sandbox and introspection remain disabled. The server export and HTTP/WebSocket behavior are tested locally; verify the actual deployed function and its logs after rollout. Vercel WebSocket availability/lifetime limits and the process-local event limitations below still apply.
 
 Prefer one public HTTPS origin serving the frontend and forwarding `/graphql` (HTTP + WebSocket upgrades) and `/auth` to the API. Set NODE_ENV=production, JWT_SECRET, DATABASE_URL, and exact ALLOWED_ORIGINS with no trailing slash or path. Set DIRECT_DATABASE_URL if migrations need a different endpoint. Keep preview and production databases separate. SameSite=Lax does not support arbitrary cross-site frontend/API deployments.
 
@@ -196,6 +204,6 @@ Prefer one public HTTPS origin serving the frontend and forwarding `/graphql` (H
 | Dependencies and headers | Apollo Server 4 is retained; dependency vulnerabilities and production CSP/monitoring still need remediation. | Upgrade supported dependencies, audit, add deployment checks and structured operational logs. |
 | Browser security | Cookie/CSRF/origin checks work; XSS can still perform authenticated actions. | Maintain secure rendering, apply a deployment-specific CSP, and verify HTTPS/cookie behavior. |
 
-The root npm package owns the API; frontend is an npm workspace. `src/db.ts` owns the shared PostgreSQL client, `src/context.ts` creates request-scoped loaders, `src/app.ts` wires transports, and `src/index.ts` drains HTTP/WebSockets and disconnects Prisma. Generated clients, build output, database files, and private environment files are ignored.
+The root npm package owns the API; frontend is an npm workspace. `src/db.ts` owns the shared PostgreSQL client, `src/context.ts` creates request-scoped loaders, `src/application.ts` wires transports, `src/app.ts` exports the deployed server, and `src/index.ts` drains local HTTP/WebSockets and disconnects Prisma. Generated clients, build output, database files, and private environment files are ignored.
 
 References: [Prisma PostgreSQL](https://www.prisma.io/docs/orm/v7/core-concepts/supported-databases/postgresql), [Prisma migrations](https://www.prisma.io/docs/orm/prisma-migrate), [PostgreSQL backup](https://www.postgresql.org/docs/current/backup.html).
