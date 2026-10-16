@@ -18,11 +18,10 @@ import { db as sharedDb } from './db.js';
 import type { PrismaClient } from './generated/prisma/client.js';
 import { securityConfiguration, readCookie, csrfToken, validCsrf } from './browser-security.js';
 
-export async function createApplication(db: PrismaClient = sharedDb) {
+export async function createApplication(db: PrismaClient = sharedDb, app = express()) {
   if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
     throw new Error('JWT_SECRET must be configured in production.');
   }
-  const app = express();
   const security = securityConfiguration();
   app.disable('x-powered-by');
   app.use((req, res, next) => {

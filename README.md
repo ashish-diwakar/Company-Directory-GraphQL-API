@@ -181,7 +181,7 @@ Coverage includes first-admin concurrency, invitations, authentication/RBAC, coo
 
 ### Vercel backend deployment
 
-`src/app.ts` is the deployment entrypoint: its default export is the initialized Node HTTP server, including the existing WebSocket upgrade handler. It does not call listen; Vercel owns that lifecycle. `src/application.ts` contains the reusable factory, while `src/index.ts` retains local listening and graceful shutdown. This fixes the `Invalid export found in module ... src/app.js` failure caused by exporting only a factory.
+`src/app.ts` is the deployment entrypoint: it imports Express directly, creates the Express app, and default-exports the initialized Node HTTP server with the WebSocket upgrade handler. The direct import is required by Vercel's Express entrypoint scanner; a wrapper that only imports the factory is not detected. It does not call listen; Vercel owns that lifecycle. `src/application.ts` configures the supplied app (or creates one for local use/tests), while `src/index.ts` retains local listening and graceful shutdown. This addresses both `No entrypoint found which imports express` and `Invalid export found in module ... src/app.js`.
 
 The root `vercel.json` selects the Express backend, runs `npm run build` (including Prisma/codegen), and includes the GraphQL SDL in the function. Import the repository root as a **backend-only** project; this configuration does not deploy the frontend workspace. Remove conflicting dashboard build/output overrides and keep the Express framework selected. Do not set the output directory to frontend/dist for this backend project.
 
