@@ -1,8 +1,6 @@
+import { createTestSchema, applyTestMigrations, dropTestSchema } from './database.js';
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import request from 'supertest';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import jwt from 'jsonwebtoken';
 import { createDatabase } from '../src/db.js';
 import { createApplication } from '../src/app.js';
@@ -27,18 +25,15 @@ describe('Account registration and revocable sessions', () => {
   }
   beforeAll(async () => {
     process.env.JWT_SECRET = 'account-tests-secret'; process.env.AUTH_DEMO_MODE = 'false';
-    directory = await mkdtemp(join(tmpdir(), 'directory-accounts-'));
-    db = createDatabase('file:' + join(directory, 'test.db').replaceAll('\\', '/'));
-    for (const migration of (await readdir('prisma/migrations')).filter(name => /^\d/.test(name)).sort()) {
-      const sql = await readFile(join('prisma/migrations', migration, 'migration.sql'), 'utf8');
-      for (const statement of sql.split(';').filter(part => part.trim())) await db.$executeRawUnsafe(statement);
-    }
+    directory = await createTestSchema();
+    db = createDatabase(directory);
+    await applyTestMigrations(db, directory);
     application = await createApplication(db);
   });
   afterAll(async () => {
     try { await application?.server.stop(); } finally {
       await db?.$disconnect();
-      if (directory) await rm(directory, { recursive: true, force: true });
+      if (directory) await dropTestSchema(directory);
       if (savedSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = savedSecret;
       if (savedDemo === undefined) delete process.env.AUTH_DEMO_MODE; else process.env.AUTH_DEMO_MODE = savedDemo;
     }

@@ -1,8 +1,6 @@
+import { createTestSchema, applyTestMigrations, dropTestSchema } from './database.js';
 import { beforeAll, afterAll, describe, it, expect } from '@jest/globals';
 import request from 'supertest';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { WebSocket } from 'ws';
 import { once } from 'node:events';
 import { createApplication } from '../src/app.js';
@@ -29,18 +27,15 @@ describe('HttpOnly browser sessions, CSRF, and origin restrictions', () => {
   }
   beforeAll(async () => {
     process.env.JWT_SECRET = 'browser-security-test-secret'; process.env.ALLOWED_ORIGINS = trusted;
-    directory = await mkdtemp(join(tmpdir(), 'directory-browser-'));
-    db = createDatabase('file:' + join(directory, 'test.db').replaceAll('\\', '/'));
-    for (const migration of (await readdir('prisma/migrations')).filter(name => /^\d/.test(name)).sort()) {
-      const sql = await readFile(join('prisma/migrations', migration, 'migration.sql'), 'utf8');
-      for (const statement of sql.split(';').filter(part => part.trim())) await db.$executeRawUnsafe(statement);
-    }
+    directory = await createTestSchema();
+    db = createDatabase(directory);
+    await applyTestMigrations(db, directory);
     app = await createApplication(db);
   });
   afterAll(async () => {
     try { await app?.server.stop(); } finally {
       await db?.$disconnect();
-      if (directory) await rm(directory, { recursive: true, force: true });
+      if (directory) await dropTestSchema(directory);
       for (const [key, value] of Object.entries({ JWT_SECRET: saved.secret, ALLOWED_ORIGINS: saved.origins, NODE_ENV: saved.env })) {
         if (value === undefined) delete process.env[key]; else process.env[key] = value;
       }

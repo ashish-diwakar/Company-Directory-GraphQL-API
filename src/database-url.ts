@@ -1,5 +1,12 @@
 import 'dotenv/config';
-import { resolve } from 'node:path';
 
-// Resolve file paths once so the CLI and runtime target the same SQLite file.
-export const databaseUrl = `file:${resolve((process.env.DATABASE_URL ?? 'file:./prisma/dev.db').replace(/^file:/, '')).replaceAll('\\', '/')}`;
+// Keep provider URLs intact, including TLS and connection-pool parameters.
+export function postgresUrl(value: string | undefined): string {
+  if (!value || !/^postgres(?:ql)?:\/\//.test(value)) {
+    throw new Error('Set DATABASE_URL to a PostgreSQL connection string. SQLite file URLs are no longer supported.');
+  }
+  try { new URL(value); } catch { throw new Error('DATABASE_URL is not a valid PostgreSQL URL.'); }
+  return value;
+}
+// Validation happens when a connection is created; generation needs no live database.
+export const databaseUrl = process.env.DATABASE_URL;

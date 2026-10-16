@@ -1,8 +1,6 @@
+import { createTestSchema, applyTestMigrations, dropTestSchema } from './database.js';
 import { beforeAll, afterAll, describe, it, expect, jest } from '@jest/globals';
 import request from 'supertest';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { parse, subscribe } from 'graphql';
 import type { ExecutionResult } from 'graphql';
 import { createApplication } from '../src/app.js';
@@ -52,12 +50,9 @@ describe('Account links and equipment privacy', () => {
   }
   beforeAll(async () => {
     process.env.JWT_SECRET = 'account-linking-test-secret';
-    directory = await mkdtemp(join(tmpdir(), 'directory-linking-'));
-    db = createDatabase('file:' + join(directory, 'test.db').replaceAll('\\', '/'));
-    for (const migration of (await readdir('prisma/migrations')).filter(name => /^\d/.test(name)).sort()) {
-      const sql = await readFile(join('prisma/migrations', migration, 'migration.sql'), 'utf8');
-      for (const statement of sql.split(';').filter(part => part.trim())) await db.$executeRawUnsafe(statement);
-    }
+    directory = await createTestSchema();
+    db = createDatabase(directory);
+    await applyTestMigrations(db, directory);
     const seeded = await seedDatabase(db);
     firstEmployee = seeded.employees[0]!.id; secondEmployee = seeded.employees[1]!.id;
     equipmentId = (await db.equipment.findUniqueOrThrow({ where: { serialNumber: 'SN-001' } })).id;
@@ -70,7 +65,7 @@ describe('Account links and equipment privacy', () => {
     jest.restoreAllMocks();
     try { await app?.server.stop(); } finally {
       await db?.$disconnect();
-      if (directory) await rm(directory, { recursive: true, force: true });
+      if (directory) await dropTestSchema(directory);
       if (savedSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = savedSecret;
     }
   });

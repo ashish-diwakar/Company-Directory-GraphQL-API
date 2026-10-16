@@ -11,7 +11,7 @@ export const queries: QueryResolvers = {
     if (start < 0 || size < 1 || size > 100 || term.length > 100) throw badInput('Use a nonnegative offset, a limit of 1–100, and a search of at most 100 characters.');
     const where: Prisma.EmployeeWhereInput = {
       ...(teamId ? { teamId } : {}),
-      ...(term ? { OR: [{ name: { contains: term } }, { email: { contains: term } }, { role: { contains: term } }] } : {}),
+      ...(term ? { OR: [{ name: { contains: term, mode: 'insensitive' } }, { email: { contains: term, mode: 'insensitive' } }, { role: { contains: term, mode: 'insensitive' } }] } : {}),
     };
     const [total, items] = await db.$transaction([db.employee.count({ where }), db.employee.findMany({ where, skip: start, take: size, orderBy: [{ name: 'asc' }, { id: 'asc' }] })]);
     return { total, items };
@@ -49,7 +49,7 @@ export const queries: QueryResolvers = {
     if (term.length > 100) throw badInput('Search must contain at most 100 characters.');
     const where: Prisma.EquipmentWhereInput = {
       ...(assigned == null ? {} : { assignedToId: assigned ? { not: null } : null }),
-      ...(term ? { OR: [{ type: { contains: term } }, { model: { contains: term } }, { serialNumber: { contains: term } }] } : {}),
+      ...(term ? { OR: [{ type: { contains: term, mode: 'insensitive' } }, { model: { contains: term, mode: 'insensitive' } }, { serialNumber: { contains: term, mode: 'insensitive' } }] } : {}),
     };
     const [total, items] = await db.$transaction([
       db.equipment.count({ where }),

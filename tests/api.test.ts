@@ -1,8 +1,6 @@
+import { createTestSchema, applyTestMigrations, dropTestSchema } from './database.js';
 import assert from 'node:assert/strict';
 import { jest, test } from '@jest/globals';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createServer } from '../src/server.js';
 import { createContext } from '../src/context.js';
 import { createDatabase } from '../src/db.js';
@@ -20,8 +18,8 @@ interface OperationData {
 }
 
 test('Prisma GraphQL persistence, validation, batching, and cache invalidation', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'directory-api-'));
-  const url = 'file:' + join(directory, 'test.db').replaceAll('\\', '/');
+  const directory = await createTestSchema();
+  const url = directory;
   const db = createDatabase(url);
   const server = createServer();
   async function execute(query: string, variables?: Record<string, unknown>, contextValue = createContext(db, admin)) {
@@ -31,11 +29,7 @@ test('Prisma GraphQL persistence, validation, batching, and cache invalidation',
     return result.body.singleResult;
   }
   try {
-    const migrations = (await readdir('prisma/migrations')).filter(name => /^\d/.test(name)).sort();
-    for (const migration of migrations) {
-      const sql = await readFile(join('prisma/migrations', migration, 'migration.sql'), 'utf8');
-      for (const statement of sql.split(';').filter(part => part.trim())) await db.$executeRawUnsafe(statement);
-    }
+    await applyTestMigrations(db, directory);
     let seeded = await seedDatabase(db);
     seeded = await seedDatabase(db);
     assert.equal(await db.team.count(), 2);
@@ -177,7 +171,7 @@ test('Prisma GraphQL persistence, validation, batching, and cache invalidation',
   } finally {
     await server.stop();
     await db.$disconnect();
-    await rm(directory, { recursive: true, force: true });
+    await dropTestSchema(directory);
   }
 });
 

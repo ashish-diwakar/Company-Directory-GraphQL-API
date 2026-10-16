@@ -67,7 +67,7 @@ export async function register(db: PrismaClient, input: { name: string; email: s
   const passwordHash = await hashPassword(input.password);
   try {
     return await db.$transaction(async tx => {
-      // First write obtains SQLite's writer lock BEFORE the first-user decision.
+      // PostgreSQL's atomic upsert locks the shared row BEFORE the first-user decision.
       await tx.registrationLock.upsert({ where: { id: 1 }, create: { id: 1 }, update: { version: { increment: 1 } } });
       const first = await tx.user.count() === 0;
       if (!first) {

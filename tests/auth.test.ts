@@ -1,9 +1,7 @@
+import { createTestSchema, applyTestMigrations, dropTestSchema } from './database.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createApplication } from '../src/app.js';
 import { createDatabase } from '../src/db.js';
 import { seedDatabase } from '../prisma/seed.js';
@@ -46,14 +44,9 @@ describe('GraphQL HTTP authentication and equipment assignment RBAC', () => {
   beforeAll(async () => {
     process.env.JWT_SECRET = secret;
     process.env.AUTH_DEMO_MODE = 'false';
-    directory = await mkdtemp(join(tmpdir(), 'directory-rbac-'));
-    db = createDatabase('file:' + join(directory, 'test.db').replaceAll('\\', '/'));
-    // Apply the committed schema to an isolated database; never reset the developer database.
-    const migrations = (await readdir('prisma/migrations')).filter(name => /^\d/.test(name)).sort();
-    for (const migration of migrations) {
-      const sql = await readFile(join('prisma/migrations', migration, 'migration.sql'), 'utf8');
-      for (const statement of sql.split(';').filter(part => part.trim())) await db.$executeRawUnsafe(statement);
-    }
+    directory = await createTestSchema();
+    db = createDatabase(directory);
+    await applyTestMigrations(db, directory);
     const seeded = await seedDatabase(db);
     for (const role of ['ADMIN', 'EMPLOYEE'] as const) {
       await db.user.create({ data: { id: `test-${role}`, name: role, email: `${role.toLowerCase()}@example.com`, role, passwordHash: 'unused-test-hash' } });
@@ -78,7 +71,7 @@ describe('GraphQL HTTP authentication and equipment assignment RBAC', () => {
     } finally {
       try { await db?.$disconnect(); }
       finally {
-        if (directory) await rm(directory, { recursive: true, force: true });
+        if (directory) await dropTestSchema(directory);
         if (saved.secret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = saved.secret;
         if (saved.demo === undefined) delete process.env.AUTH_DEMO_MODE; else process.env.AUTH_DEMO_MODE = saved.demo;
       }

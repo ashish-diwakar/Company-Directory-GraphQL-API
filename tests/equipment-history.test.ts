@@ -1,8 +1,6 @@
+import { createTestSchema, applyTestMigrations, dropTestSchema } from './database.js';
 import { beforeAll, afterAll, describe, it, expect } from '@jest/globals';
 import request from 'supertest';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { createApplication } from '../src/app.js';
 import { createDatabase } from '../src/db.js';
 import { registerTestUser as register } from './helpers/register.js';
@@ -37,12 +35,9 @@ describe('Transactional assignment history and device returns', () => {
   }
   beforeAll(async () => {
     process.env.JWT_SECRET = 'equipment-history-test-secret';
-    directory = await mkdtemp(join(tmpdir(), 'directory-history-'));
-    db = createDatabase('file:' + join(directory, 'test.db').replaceAll('\\', '/'));
-    for (const migration of (await readdir('prisma/migrations')).filter(name => /^\d/.test(name)).sort()) {
-      const sql = await readFile(join('prisma/migrations', migration, 'migration.sql'), 'utf8');
-      for (const statement of sql.split(';').filter(part => part.trim())) await db.$executeRawUnsafe(statement);
-    }
+    directory = await createTestSchema();
+    db = createDatabase(directory);
+    await applyTestMigrations(db, directory);
     const seed = await seedDatabase(db);
     firstId = seed.employees[0]!.id; secondId = seed.employees[1]!.id;
     deviceId = (await db.equipment.create({ data: { type: 'Laptop', model: 'History Device', serialNumber: 'AUDIT-001' } })).id;
@@ -58,7 +53,7 @@ describe('Transactional assignment history and device returns', () => {
     for (const id of subscriptions) pubsub.unsubscribe(id);
     try { await app?.server.stop(); } finally {
       await db?.$disconnect();
-      if (directory) await rm(directory, { recursive: true, force: true });
+      if (directory) await dropTestSchema(directory);
       if (savedSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = savedSecret;
     }
   });
@@ -122,13 +117,18 @@ describe('Transactional assignment history and device returns', () => {
   });
   it('rolls back ownership if writing the audit record fails, with no broadcasts', async () => {
     const before = [...events];
-    await db.$executeRawUnsafe(`CREATE TRIGGER fail_audit BEFORE INSERT ON "AssignmentEvent" BEGIN SELECT RAISE(ABORT, 'test audit unavailable'); END`);
+    const schema = new URL(directory).searchParams.get('schema')!;
+    await db.$executeRawUnsafe(`CREATE FUNCTION "${schema}".fail_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test audit unavailable'; END; $$`);
+    await db.$executeRawUnsafe(`CREATE TRIGGER fail_audit BEFORE INSERT ON "${schema}"."AssignmentEvent" FOR EACH ROW EXECUTE FUNCTION "${schema}".fail_audit()`);
     try {
       expect((await post(assign, { e: firstId, q: deviceId }, admin.token)).body.errors).toBeDefined();
       expect((await db.equipment.findUniqueOrThrow({ where: { id: deviceId } })).assignedToId).toBeNull();
       expect(await db.assignmentEvent.count()).toBe(3);
       expect(events).toEqual(before);
-    } finally { await db.$executeRawUnsafe('DROP TRIGGER fail_audit'); }
+    } finally {
+      await db.$executeRawUnsafe(`DROP TRIGGER fail_audit ON "${schema}"."AssignmentEvent"`);
+      await db.$executeRawUnsafe(`DROP FUNCTION "${schema}".fail_audit()`);
+    }
   });
   it('preserves historical snapshots after metadata edits and directory reseeding', async () => {
     await db.equipment.update({ where: { id: deviceId }, data: { model: 'Renamed', serialNumber: 'NEW-SERIAL' } });

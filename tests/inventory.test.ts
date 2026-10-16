@@ -1,8 +1,6 @@
+import { createTestSchema, applyTestMigrations, dropTestSchema } from './database.js';
 import { beforeAll, afterAll, describe, it, expect } from '@jest/globals';
 import request from 'supertest';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { createApplication } from '../src/app.js';
 import { createDatabase } from '../src/db.js';
 import { registerTestUser as register } from './helpers/register.js';
@@ -31,12 +29,9 @@ describe('Admin equipment inventory', () => {
   }
   beforeAll(async () => {
     process.env.JWT_SECRET = 'inventory-tests-secret';
-    directory = await mkdtemp(join(tmpdir(), 'directory-inventory-'));
-    db = createDatabase('file:' + join(directory, 'test.db').replaceAll('\\', '/'));
-    for (const migration of (await readdir('prisma/migrations')).filter(name => /^\d/.test(name)).sort()) {
-      const sql = await readFile(join('prisma/migrations', migration, 'migration.sql'), 'utf8');
-      for (const statement of sql.split(';').filter(part => part.trim())) await db.$executeRawUnsafe(statement);
-    }
+    directory = await createTestSchema();
+    db = createDatabase(directory);
+    await applyTestMigrations(db, directory);
     const seeded = await seedDatabase(db);
     employeeId = seeded.employees[0]!.id;
     admin = (await register(db, { name: 'Admin', email: 'admin@example.com', password: 'inventory-test-password' })).token;
@@ -46,7 +41,7 @@ describe('Admin equipment inventory', () => {
   afterAll(async () => {
     try { await application?.server.stop(); } finally {
       await db?.$disconnect();
-      if (directory) await rm(directory, { recursive: true, force: true });
+      if (directory) await dropTestSchema(directory);
       if (savedSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = savedSecret;
     }
   });
