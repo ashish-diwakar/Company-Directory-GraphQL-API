@@ -1,10 +1,35 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "express",
-  "buildCommand": "npm run build",
-  "functions": {
-    "src/app.ts": {
-      "includeFiles": "src/schema.graphql"
+  "services": {
+    "backend": {
+      "root": ".",
+      "framework": "express",
+      "buildCommand": "npm run build",
+      "functions": {
+        "src/app.ts": {
+          "includeFiles": "src/schema.graphql"
+        }
+      }
+    },
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite",
+      "buildCommand": "npm run build",
+      "outputDirectory": "dist"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/graphql",
+      "destination": { "service": "backend" }
+    },
+    {
+      "source": "/auth/(.*)",
+      "destination": { "service": "backend" }
+    },
+    {
+      "source": "/(.*)",
+      "destination": { "service": "frontend" }
+    }
+  ]
 }
